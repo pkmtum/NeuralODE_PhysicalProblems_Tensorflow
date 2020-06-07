@@ -108,6 +108,12 @@ def makedirs(dirname):
         os.makedirs(dirname)
 
 
+def my_mse(y_true, y_pred):
+    """Needed because Keras' MSE implementation includes L2 penalty """
+    squared_difference = tf.square(y_true - y_pred)
+    return tf.reduce_mean(squared_difference, axis=-1)
+
+
 def total_energy(state, k=1, m=1):
     """Calculates total energy of a mass-spring-damper system given a state."""
     if len(state.shape) == 1:

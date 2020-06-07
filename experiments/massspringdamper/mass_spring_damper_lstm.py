@@ -10,7 +10,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense, LSTM
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, modelFunc, visualize
+from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
     gpus[0],
@@ -61,13 +61,6 @@ class TrainDatagen(tf.keras.utils.Sequence):
         batch_x = np.stack([x_train[n, s+i] for i in range(args.batch_time)], axis=1) # (T, M, D)
         batch_y = np.stack([y_train[n, s+i] for i in range(args.batch_time)], axis=1) # (T, M, D)
         return batch_x, batch_y
-
-
-def my_mse(y_true, y_pred):
-    # Needed because Keras MSE includes the l2 penalty
-    squared_difference = tf.square(y_true - y_pred)
-    return tf.reduce_mean(squared_difference, axis=-1)
-
 
 model = Sequential()
 model.add(LSTM(8, kernel_regularizer=l2(0.00001), return_sequences=True,

@@ -10,7 +10,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, modelFunc, visualize
+from utils import create_dataset, load_dataset, makedirs, my_mse, modelFunc, visualize
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
@@ -153,10 +153,10 @@ class ODENet(tf.keras.Model):
     def __init__(self, hidden_dim, output_dim):
         super(ODENet, self).__init__()
         self.output_dim = output_dim
-        self.dense1 = Dense(hidden_dim, activation='relu', kernel_regularizer=l2(0.00001))
+        self.dense1 = Dense(hidden_dim, 'relu', kernel_regularizer=l2(0.00001))
         odefunc = ODEFunc(hidden_dim+0, augment_dim=0)
         self.odeblock = ODEBlock(odefunc, solver='dopri5')
-        self.dense2 = Dense(output_dim, activation=None, kernel_regularizer=l2(0.00001))
+        self.dense2 = Dense(output_dim, kernel_regularizer=l2(0.00001))
 
     def call(self, x):
         out = self.dense1(x)
@@ -173,8 +173,8 @@ x_train, y_train, x_val, y_val = load_dataset()
 x_train = np.reshape(x_train, (-1, 2))
 y_train = np.reshape(y_train, (-1, 2))
 
-x_val_extrapolation, y_val_extrapolation = x_val[0], y_val[0]
-x_val_interpolation, y_val_interpolation = x_val[1], y_val[1]
+x_val_extrap, y_val_extrap = x_val[0], y_val[0]
+x_val_interp, y_val_interp = x_val[1], y_val[1]
 
 x_val = np.reshape(x_val, (-1, 2))
 y_val = np.reshape(y_val, (-1, 2))
@@ -184,20 +184,14 @@ np.random.shuffle(c)
 x_train = x_train[c[::int(100/args.dataset_size)]]
 y_train = y_train[c[::int(100/args.dataset_size)]]
 
-
 if args.network == 'odenet':
-    model = ODENet(hidden_dim=8, output_dim=y_train.shape[-1])
+    model = ODENet(hidden_dim=8, output_dim=2)
 elif args.network == 'densenet':
     model = Sequential()
-    model.add(Dense(8, activation='relu', kernel_regularizer=l2(0.*0.00001),
-                    input_shape=(x_train.shape[-1],)))
-    model.add(Dense(8, activation='relu', kernel_regularizer=l2(0.*0.00001)))
-    model.add(Dense(y_train.shape[-1], activation=None, kernel_regularizer=l2(0.*0.00001)))
-
-def my_mse(y_true, y_pred):
-    # Needed because Keras' MSE implementation includes L2 penalty
-    squared_difference = tf.square(y_true - y_pred)
-    return tf.reduce_mean(squared_difference, axis=-1)
+    model.add(Dense(8, 'relu', kernel_regularizer=l2(0.*0.00001),
+                    input_shape=(2,)))
+    model.add(Dense(8, 'relu', kernel_regularizer=l2(0.*0.00001)))
+    model.add(Dense(2, kernel_regularizer=l2(0.*0.00001)))
 
 adam = Adam(lr=args.lr)
 model.compile(optimizer=adam, loss='mse', metrics=['mae', my_mse])
@@ -207,7 +201,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
 if args.network == 'densenet':
-    epoch_multi = 10  # we can train regular NN's much longer in a given time period
+    epoch_multi = 10  # we can afford to train regular NN's for longer
 elif args.network == 'odenet':
     epoch_multi = 5
 
@@ -230,8 +224,8 @@ for epoch in range(10):
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
 
-    print('Extrapolation:', model.evaluate(x_val_extrapolation, y_val_extrapolation, verbose=0))
-    print('Interpolation:', model.evaluate(x_val_interpolation, y_val_interpolation, verbose=0))
+    print('extrap:', model.evaluate(x_val_extrap, y_val_extrap))
+    print('interp:', model.evaluate(x_val_interp, y_val_interp))
     if args.viz:
         visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
                   ode_model=True, epoch=(epoch+1)*epoch_multi)
