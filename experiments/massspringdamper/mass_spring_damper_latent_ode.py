@@ -97,7 +97,8 @@ if __name__ == '__main__':
             with tf.GradientTape() as tape:
                 batch_x0, batch_t, batch_x = get_batch()
                 pred_x = odeint(func, batch_x0, batch_t, method=args.method) # (T, B, D)
-                loss = tf.reduce_mean(tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1))
+                ex_loss = tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1)
+                loss = tf.reduce_mean(ex_loss)
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
                 l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 0.00001
                 loss = loss + l2_loss
