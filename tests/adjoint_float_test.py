@@ -1,59 +1,58 @@
-from typing import Iterable
+"""Comparision of the adjoint method with regular backpropagation.
+Also compares tf.float32 to tf.float64.
+"""
 import numpy as np
 import tensorflow as tf
-
 from tfdiffeq import odeint
 from tfdiffeq import odeint_adjoint
-import matplotlib.pyplot as plt
 
-dtype = tf.float64
-# wir wollen gradient bzgl self.b
-class ODE(tf.keras.Model):
-    def __init__(self, a, b):
-        super(ODE, self).__init__(dtype=dtype)
-        self.a = a
-        self.b = b
+dtypes = [tf.float32, tf.float64]
 
-    def call(self, t, x):
-        dX_dT = self.a*tf.math.exp(self.b*t)
-        return dX_dT
+for rtol in np.logspace(-14, 0, 15)[::-1]:
+    print('rtol:', rtol)
+    for dtype in dtypes:
+        # wir wollen gradient bzgl self.b
+        class ODE(tf.keras.Model):
+            def __init__(self, a, b):
+                super(ODE, self).__init__(dtype=dtype)
+                self.a = tf.Variable(a)
+                self.b = tf.Variable(b)
+                self.nfe = tf.Variable(0., trainable=False)
+                self.nbe = tf.Variable(0., trainable=False)
 
-def euler(func, y0, t, return_intermediates=True):
-    solution = [y0]
-    y = y0
-    for t0, t1 in zip(t[:-1], t[1:]):
-        y = y + (t1-t0)*func(t0, y)
-        solution.append(y)
-    if not return_intermediates:
-        return y[-1]
-    return tf.convert_to_tensor(solution)
+            def call(self, t, x):
+                self.nfe.assign_add(1.)
+                dX_dT = self.a*tf.math.exp(self.b*t)
+                return dX_dT
 
-def exact_solution(a, b, T):
-    return a/b*(np.exp(b*T)-1)
+        def exact_solution(a, b, T):
+            return a/b*(np.exp(b*T)-1)
 
-def exact_derivative(a, b, T):
-    return a*(T/b*np.exp(b*T)-(np.exp(b*T)-1)/(b*b))
+        def exact_derivative(a, b, T):
+            return a*(T/b*np.exp(b*T)-(np.exp(b*T)-1)/(b*b))
 
-x_0 = tf.constant(0., dtype=dtype)
-a = tf.constant(2., dtype=dtype)
-b = tf.constant(2., dtype=dtype)
-T = tf.constant(2., dtype=tf.float64)
-t = tf.cast(tf.linspace(0., T, 2), dtype=tf.float64)
+        x_0 = tf.constant(1., dtype=dtype)
+        a = tf.constant(2., dtype=dtype)
+        b = tf.constant(2., dtype=dtype)
+        T = tf.constant(2., dtype=dtype)
+        t = tf.cast(tf.linspace(0., T, 2), dtype=dtype)
 
-odemodel = ODE(a, b)
+        odemodel = ODE(a, b)
 
-sol = []
+        with tf.device('/gpu:0'):
+            var = odemodel.b
 
-with tf.device('/gpu:0'):
-    for i in range(10):
-        with tf.GradientTape(persistent=True) as g:
-            g.watch(odemodel.b)
-            y_sol = odeint(odemodel, x_0, t)
-            y_sol = y_sol[-1]
-        dF_dB = g.gradient(y_sol, odemodel.b)
-        sol.append([a, odemodel.b, T, dF_dB])
+            with tf.GradientTape() as g:
+                g.watch(var)
+                y_sol = odeint(odemodel, x_0, t, rtol=rtol, atol=1e-10)[-1]
+            dYdX_backprop = g.gradient(y_sol, var).numpy()
 
-sol = np.array(sol)
-dYdX_adjoint = sol[:, -1]
-dYdX_exact = exact_derivative(sol[:, 0], sol[:, 1], sol[:, 2])
-print(dYdX_exact, dYdX_adjoint, dYdX_exact/dYdX_adjoint)
+            with tf.GradientTape() as g:
+                g.watch(var)
+                y_sol_adj = odeint_adjoint(odemodel, x_0, t, rtol=rtol, atol=1e-10)[-1]
+            dYdX_adjoint = g.gradient(y_sol_adj, var).numpy()
+
+        dYdX_exact = exact_derivative(a, b, T).numpy()
+
+        print('Adjoint:', abs(dYdX_adjoint-dYdX_exact)/dYdX_exact, dtype)
+        print('Backprop:', abs(dYdX_backprop-dYdX_exact)/dYdX_exact, dtype)
