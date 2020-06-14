@@ -23,7 +23,7 @@ import tensorflow as tf
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
     gpus[0],
-    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)])
+    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--network', type=str, choices=['resnet', 'odenet'], default='odenet')
@@ -32,15 +32,20 @@ parser.add_argument('--adjoint', type=eval, default=False, choices=[True, False]
 parser.add_argument('--nepochs', type=int, default=160)
 parser.add_argument('--lr', type=float, default=0.1)
 parser.add_argument('--batch_size', type=int, default=128)
+parser.add_argument('--dtype', type=str, choices=['float32', 'float64'], default='float32')
 parser.add_argument('--save', type=str, default='./')
 args = parser.parse_args()
 
 MAX_NUM_STEPS = 1000
+if args.dtype == 'float64':
+    tf.keras.backend.set_floatx('float64')
+else:
+    tf.keras.backend.set_floatx('float32')
+
 if args.adjoint:
     from tfdiffeq import odeint_adjoint as odeint
 else:
     from tfdiffeq import odeint
-
 
 class GroupNormalization(tf.keras.layers.Layer):
     """Group normalization layer
@@ -340,7 +345,7 @@ class Conv2dODEFunc(tf.keras.Model):
 
 class ODEBlock(tf.keras.Model):
 
-    def __init__(self, odefunc, is_conv=False, tol=1e-3, adjoint=False, solver='dopri5', **kwargs):
+    def __init__(self, odefunc, is_conv=False, tol=1e-3, solver='dopri5', **kwargs):
         """
         Solves ODE defined by odefunc.
         # Arguments:
@@ -350,15 +355,11 @@ class ODEBlock(tf.keras.Model):
                 If True, treats odefunc as a convolutional model.
             tol : float
                 Error tolerance.
-            adjoint : bool
-                If True calculates gradient with adjoint solver, otherwise
-                backpropagates directly through operations of ODE solver.
             solver: ODE solver. Defaults to DOPRI5.
         """
         dynamic = kwargs.pop('dynamic', True)
         super(ODEBlock, self).__init__(**kwargs, dynamic=dynamic)
 
-        self.adjoint = adjoint
         self.is_conv = is_conv
         self.odefunc = odefunc
         self.tol = tol
@@ -516,11 +517,10 @@ else:
     x_test = x_test.reshape(x_test.shape[0], img_rows, img_cols, 1)
     input_shape = (img_rows, img_cols, 1)
 
-x_train = x_train.astype('float32')
-x_test = x_test.astype('float32')
+x_train = x_train.astype(args.dtype)
+x_test = x_test.astype(args.dtype)
 x_train /= 255
 x_test /= 255
-
 print('x_train shape:', x_train.shape)
 print(x_train.shape[0], 'train samples')
 print(x_test.shape[0], 'test samples')
@@ -528,7 +528,6 @@ print(x_test.shape[0], 'test samples')
 # convert class vectors to binary class matrices
 y_train = tf.keras.utils.to_categorical(y_train, 10)
 y_test = tf.keras.utils.to_categorical(y_test, 10)
-
 
 # Defining the models
 # Weight initialization is done this way to reproduce PyTorch's behavior
@@ -558,9 +557,6 @@ if args.network == 'odenet':
             One of 'relu' and 'softplus'
         tol : float
             Error tolerance.
-        adjoint : bool
-            If True calculates gradient with adjoint method, otherwise
-            backpropagates directly through operations of ODE solver.
         return_sequences : bool
             Whether to return the Convolution outputs, or the features after an
             affine transform.
@@ -570,7 +566,7 @@ if args.network == 'odenet':
         def __init__(self,
                      time_dependent=False, out_kernel_size=(1, 1),
                      activation='relu', out_strides=(1, 1),
-                     tol=1e-10, adjoint=False, solver='dopri5', **kwargs):
+                     tol=1e-10, solver='dopri5', **kwargs):
 
             dynamic = kwargs.pop('dynamic', True)
             super(Conv2dODENet, self).__init__(**kwargs, dynamic=dynamic)
@@ -632,7 +628,7 @@ if args.network == 'odenet':
                 return features, pred
             return pred
 
-    model = Conv2dODENet(adjoint=True, tol=1e-3, solver='dopri5', time_dependent=True)
+    model = Conv2dODENet(tol=args.tol, solver='dopri5', time_dependent=True)
 elif args.network == 'resnet':
     model_input = Input(shape=input_shape)
     features = Conv2D(filters=64, kernel_size=3, strides=1,
