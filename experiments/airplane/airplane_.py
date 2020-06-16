@@ -168,7 +168,7 @@ class ODENet(tf.keras.Model):
         return tf.TensorShape([input_shape[0], self.output_dim])
 
 if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
-    x_train, y_train, x_val, y_val = create_dataset(n_series=100)
+    x_train, y_train, x_val, y_val = create_dataset(n_series=51)
 x_train, y_train, x_val, y_val = load_dataset()
 print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
 x_train = np.reshape(x_train, (-1, 4))
@@ -191,7 +191,7 @@ elif args.network == 'densenet':
     model = Sequential()
     model.add(Dense(32, 'relu', kernel_regularizer=l2(0.00001),
                     input_shape=(4,)))
-    model.add(Dense(32, 'tanh', kernel_regularizer=l2(0.00001)))
+    model.add(Dense(32, 'relu', kernel_regularizer=l2(0.00001)))
     model.add(Dense(4, kernel_regularizer=l2(0.00001)))
 
 adam = Adam(lr=args.lr)

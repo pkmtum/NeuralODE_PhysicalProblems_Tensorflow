@@ -67,7 +67,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     delta_t = 0.1
     x_train = []
     y_train = []
-    x0 = tf.random.uniform((n_series, 4))
+    x0 = (2*tf.random.uniform((n_series, 4))-1)
     for i in range(n_series):
         airplane = Airplane(x0=x0[i])
         with tf.device('/gpu:0'):
@@ -79,11 +79,13 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
 
     x_val = []
     y_val = []
-    airplane = Airplane(x0=tf.constant([1., .01, .01, .01]))
+    # Extrapolation
+    airplane = Airplane(x0=tf.constant([1.5, 1., 2., .5]))
     with tf.device('/gpu:0'):
         x_val.append(airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
         y_val.append(np.array(airplane.call(0., x_val[-1])))
-    airplane = Airplane(x0=tf.constant([.01, .01, 1., .01]))
+    # Interpolation
+    airplane = Airplane(x0=tf.constant([.5, .5, .5, .5]))
     with tf.device('/gpu:0'):
         x_val.append(airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
         y_val.append(np.array(airplane.call(0., x_val[-1])))
@@ -208,7 +210,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         ax_traj.plot(t.numpy(), x_val[0, :, i], 'g-')
         ax_traj.plot(t.numpy(), x_t[0, :, i], 'b--')
     ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
-    ax_traj.set_ylim(-1, 1)
+    ax_traj.set_ylim(-2, 2)
     ax_traj.legend()
 
     ax_phase.cla()
@@ -311,8 +313,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
                  + str(args.lr) + str(args.dataset_size) + str(args.batch_size)
                  + ".csv")
     if not os.path.isfile(file_path):
-        title_string = ("wall_time,epoch,phase_error_interp_lp,"
-                        + "phase_error_interp_sp,phase_error_extrap_lp,phase_error_extrap_sp,"
+        title_string = ("wall_time,epoch,"
+                        + "phase_error_interp_lp,phase_error_interp_sp,"
+                        + "phase_error_extrap_lp,phase_error_extrap_sp,"
                         + "traj_err_interp, traj_err_extrap\n")
         fd = open(file_path, 'a')
         fd.write(title_string)

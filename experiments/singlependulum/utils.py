@@ -138,7 +138,7 @@ def relative_phase_error(x_pred, x_val):
     t_pred = np.mean(np.diff(pred_crossings)) * 2
     phase_error = t_ref/t_pred - 1
     return phase_error
-
+    
 
 def trajectory_error(x_pred, x_val):
     return np.mean(np.abs(x_pred - x_val))
