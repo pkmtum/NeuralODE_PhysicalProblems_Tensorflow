@@ -134,9 +134,10 @@ def relative_phase_error(x_pred, x_val):
     """
     ref_crossings = zero_crossings(x_val[:, 0])
     pred_crossings = zero_crossings(x_pred[:, 0])
-    n_crossings = min(len(pred_crossings), len(ref_crossings))
-    phase_error = 1 / ref_crossings[:n_crossings]-1 / pred_crossings[:n_crossings]
-    return np.mean(phase_error * ref_crossings[:n_crossings])
+    t_ref = np.mean(np.diff(ref_crossings)) * 2
+    t_pred = np.mean(np.diff(pred_crossings)) * 2
+    phase_error = t_ref/t_pred - 1
+    return phase_error
 
 
 def trajectory_error(x_pred, x_val):
