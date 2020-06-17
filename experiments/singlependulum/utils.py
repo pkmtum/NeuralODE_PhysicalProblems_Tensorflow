@@ -13,7 +13,8 @@ from SinglePendulum import SinglePendulum
 class Lambda(tf.keras.Model):
 
     def call(self, t, y):
-        return tf.stack([y[:,1], -9.81*tf.math.sin(y[:,0])], axis=-1)
+        return tf.stack([y[:, 1], -9.81*tf.math.sin(y[:, 0])], axis=-1)
+
 
 class modelFunc(tf.keras.Model):
     """Converts a standard tf.keras.Model to a model compatible with odeint."""
@@ -26,6 +27,7 @@ class modelFunc(tf.keras.Model):
         if len(x.shape) == 1:
             return self.model(tf.expand_dims(x, axis=0))[0]
         return self.model(x)
+
 
 class RunningAverageMeter():
     """Computes and stores the average and current value"""
@@ -44,6 +46,7 @@ class RunningAverageMeter():
         else:
             self.avg = self.avg * self.momentum + val * (1 - self.momentum)
         self.val = val
+
 
 def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     """Creates a dataset with n_series data series that are each simulated for samples_per_series
@@ -87,6 +90,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
         np.save('experiments/datasets/single_pendulum_y_val.npy', y_val)
     return x_train, y_train, x_val, y_val
 
+
 def load_dataset():
     x_train = np.load('experiments/datasets/single_pendulum_x_train.npy').astype(np.float32)
     y_train = np.load('experiments/datasets/single_pendulum_y_train.npy').astype(np.float32)
@@ -100,15 +104,9 @@ def makedirs(dirname):
         os.makedirs(dirname)
 
 
-def total_energy(state):
+def total_energy(state, l=1., g=9.81):
     """Calculates total energy of a pendulum system given a state."""
-    l = 1.
-    g = 9.81
-    if len(state.shape) == 1: # (state)
-        return (1-np.cos(state[0]))*l*g+state[1]*state[1]*0.5
-    if len(state.shape) == 2: #(batch, state)
-        return (1-np.cos(state[:, 0]))*l*g+state[:, 1]*state[:, 1]*0.5
-    raise ValueError('NDIM must be 1 or 2 but is {}'.format(len(state.shape)))
+    return (1-np.cos(state[..., 0]))*l*g+state[..., 1]*state[..., 1]*0.5
 
 
 def relative_energy_drift(x_pred, x_true, t=-1):
@@ -138,7 +136,7 @@ def relative_phase_error(x_pred, x_val):
     t_pred = np.mean(np.diff(pred_crossings)) * 2
     phase_error = t_ref/t_pred - 1
     return phase_error
-    
+
 
 def trajectory_error(x_pred, x_val):
     return np.mean(np.abs(x_pred - x_val))
@@ -160,15 +158,11 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     dt = 0.01
     t = tf.linspace(0., 10., int(10./dt)+1)
     if ode_model:
-        if latent: # Dense-Net or ODE-Net
-            x0 = tf.stack([[1.5, .5]])
-            x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()[:,0]
-        else: # NODE-e2e
-            x0 = tf.stack([1.5, .5])
-            x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()
+        x0 = tf.stack([[1.5, .5]])
+        x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
     else: # is LSTM
         x_t = np.zeros((1001, 2))
-        x_t[0] = np.array([1.5, .5])
+        x_t[0] = x_val[0]
         for i in range(1, len(t)):
             x_t[1:i+1] = model(0., np.expand_dims(x_t, axis=0))[0, :i]
 
@@ -204,23 +198,22 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vecfield.set_ylabel('theta_dt')
 
     steps = 61
-    y, x = np.mgrid[-6:6:complex(0,steps), -6:6:complex(0,steps)]
+    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
     ref_func = Lambda()
-    dydt_ref = ref_func(0., tf.convert_to_tensor(np.stack([x, y], -1).reshape(steps * steps, 2))).numpy()
-    mag_ref = 1e-8+np.sqrt(dydt_ref[:, 0]**2 + dydt_ref[:, 1]**2).reshape(-1, 1)
+    dydt_ref = ref_func(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
+    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 2)
-    if ode_model:
-        dydt = model(0., tf.convert_to_tensor(np.stack([x, y], -1).reshape(steps * steps, 2))).numpy()
-    else:
-        yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:,0]
+
+    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
+        dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
+    else: # is LSTM
+        yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
         dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
 
-    abs_dydt = dydt.reshape(steps, steps, 2)
-    mag = np.sqrt(dydt[:, 0]**2 + dydt[:, 1]**2).reshape(-1, 1)
-    dydt = (dydt / mag) # make unit vector
-    dydt = dydt.reshape(steps, steps, 2)
+    dydt_abs = dydt.reshape(steps, steps, 2)
+    dydt_unit = dydt / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
 
-    ax_vecfield.streamplot(x, y, dydt[:, :, 0], dydt[:, :, 1], color="black")
+    ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)
     ax_vecfield.set_ylim(-6, 6)
 
@@ -229,13 +222,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vec_error_abs.set_xlabel('theta')
     ax_vec_error_abs.set_ylabel('theta_dt')
 
-
-    x_dif = abs_dydt[:, :, 0]-dydt_ref[:, :, 0]
-    y_dif = abs_dydt[:, :, 1]-dydt_ref[:, :, 1]
-    abs_dif = np.clip(np.sqrt(x_dif**2 + y_dif**2), 0., 3.)
+    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
-
 
     ax_vec_error_abs.set_xlim(-6, 6)
     ax_vec_error_abs.set_ylim(-6, 6)
@@ -245,7 +234,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vec_error_rel.set_xlabel('theta')
     ax_vec_error_rel.set_ylabel('theta_dt')
 
-    rel_dif = np.clip(abs_dif / mag_ref.reshape(steps, steps), 0., 1.)
+    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
     c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
     plt.colorbar(c2, ax=ax_vec_error_rel)
 
@@ -255,8 +244,8 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_energy.cla()
     ax_energy.set_title('Total Energy')
     ax_energy.set_xlabel('t')
-    ax_energy.plot(np.arange(1001)/100.1, np.array([total_energy(x_) for x_ in x_t]))
-    ax_energy.plot(np.arange(1001)/100.1, total_energy(x_t))
+    ax_energy.plot(np.arange(0., x_t.shape[0]*dt, dt), np.array([total_energy(x_) for x_ in x_t]))
+    ax_energy.plot(np.arange(0., x_t.shape[0]*dt, dt), total_energy(x_t))
 
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
@@ -266,6 +255,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     energy_drift_interp = relative_energy_drift(x_t, x_val)
     phase_error_interp = relative_phase_error(x_t, x_val)
     traj_err_interp = trajectory_error(x_t, x_val)
+
 
     wall_time = (datetime.datetime.now()
                  - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()

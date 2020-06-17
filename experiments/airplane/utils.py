@@ -7,7 +7,6 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from tfdiffeq import odeint
-import mdn
 from Airplane import Airplane
 
 class Lambda(tf.keras.Model):
@@ -162,36 +161,21 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     t = tf.linspace(0., 100., int(100./dt)+1)
     # Compute the predicted trajectories
     if ode_model:
-        if latent: # NODE-e2e model
-            x0_extrap = tf.stack([x_val[0, 0]])
-            x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-            x0_interp = tf.stack([x_val[1, 0]])
-            x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-        else:  # regular (Dense or NODE-Net) model
-            x0_extrap = tf.stack(x_val[0, 0])
-            x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()
-            x0_interp = tf.stack(x_val[1, 0])
-            x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()
+        x0_extrap = tf.stack([x_val[0, 0]])
+        x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
+        x0_interp = tf.stack([x_val[1, 0]])
+        x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
     else: # LSTM model
         x_t_extrap = np.zeros((1001, 4))
-        x_t_extrap[0] = [1.0, 0.]
+        x_t_extrap[0] = x_val[0, 0]
         x_t_interp = np.zeros((1001, 4))
         x_t_interp[0] = x_val[1, 0]
         # Always injects the entire time series because keras is slow when using
         # varying series lengths and the future timesteps don't affect the predictions
         # before it anyways.
-        if is_mdn:
-            for i in range(1, len(t)):
-                pred = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-                x_t_extrap[i:i+1] = mdn.sample_from_output(pred.numpy()[0], 4, 5, temp=1.)
-            for i in range(1, len(t)):
-                pred = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
-                x_t_interp[i:i+1] = mdn.sample_from_output(pred.numpy()[0], 4, 5, temp=1.0)
-        else:
-            for i in range(1, len(t)):
-                x_t_extrap[i:i+1] = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-            for i in range(1, len(t)):
-                x_t_interp[i:i+1] = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
+        for i in range(1, len(t)):
+            x_t_extrap[i:i+1] = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
+            x_t_interp[i:i+1] = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
 
     x_t = np.stack([x_t_extrap, x_t_interp], axis=0)
     # Plot the generated trajectories
@@ -234,27 +218,21 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     zeros = tf.zeros_like(x)
     input_grid = np.stack([x, y, zeros, zeros], -1)
     ref_func = Lambda()
-    dydt_ref = ref_func(0., tf.convert_to_tensor(input_grid.reshape(steps * steps, 4))).numpy()
-    mag_ref = 1e-8+np.sqrt(dydt_ref[:, 0]**2 + dydt_ref[:, 1]**2).reshape(-1, 1)
+    dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 4)).numpy()
+    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 4)
-    if ode_model:
-        dydt = model(0., tf.convert_to_tensor(input_grid.reshape(steps * steps, 4))).numpy()
-    else:
+    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
+        dydt = model(0., input_grid.reshape(steps * steps, 4)).numpy()
+    else: # is LSTM
         # Compute artificial x_dot by numerically diffentiating:
-        # x_dot \approx (x_{t+1}-x_t)/dt
-        if is_mdn:
-            yt_1 = model(0., input_grid.reshape(steps * steps, 1, 4))[:, 0]
-            yt_1 = np.apply_along_axis(mdn.sample_from_output, 1, yt_1.numpy(), 4, 5, temp=.1)[:, 0]
-        else:
-            yt_1 = model(0., input_grid.reshape(steps * steps, 1, 4))[:, 0]
+        # x_dot \approx (x_{t+1}-x_t)/d
+        yt_1 = model(0., input_grid.reshape(steps * steps, 1, 4))[:, 0]
         dydt = (np.array(yt_1)-input_grid.reshape(steps * steps, 4)) / dt
 
-    abs_dydt = dydt.reshape(steps, steps, 4)
-    mag = np.sqrt(dydt[:, 0]**2 + dydt[:, 1]**2).reshape(-1, 1)
-    dydt = (dydt / mag) # make unit vector
-    dydt = dydt.reshape(steps, steps, 4)
+    dydt_abs = dydt.reshape(steps, steps, 4)
+    dydt_unit = dydt / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
 
-    ax_vecfield.streamplot(x, y, dydt[:, :, 0], dydt[:, :, 1], color="black")
+    ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)
     ax_vecfield.set_ylim(-6, 6)
 
@@ -263,22 +241,19 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vec_error_abs.set_xlabel('V')
     ax_vec_error_abs.set_ylabel('gamma')
 
-    x_dif = abs_dydt[:, :, 0]-dydt_ref[:, :, 0]
-    y_dif = abs_dydt[:, :, 1]-dydt_ref[:, :, 1]
-    abs_dif = np.clip(np.sqrt(x_dif**2 + y_dif**2), 0., 3.)
+    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
 
     ax_vec_error_abs.set_xlim(-6, 6)
     ax_vec_error_abs.set_ylim(-6, 6)
 
-
     ax_vec_error_rel.cla()
     ax_vec_error_rel.set_title('Rel. error of V\', gamma\'')
     ax_vec_error_rel.set_xlabel('V')
     ax_vec_error_rel.set_ylabel('gamma')
 
-    rel_dif = np.clip(abs_dif / mag_ref.reshape(steps, steps), 0., 1.)
+    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
     c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
     plt.colorbar(c2, ax=ax_vec_error_rel)
 

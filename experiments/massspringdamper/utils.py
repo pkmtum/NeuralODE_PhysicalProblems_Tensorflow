@@ -13,10 +13,11 @@ from MassSpringDamper import MassSpringDamper
 class Lambda(tf.keras.Model):
 
     def call(self, t, y):
-        m = 1
-        c = 1
-        d = 0
+        m = 1.
+        c = 1.
+        d = 0.
         return tf.stack([y[:, 1], -(d*y[:, 1]+c*y[:, 0]) / m], axis=-1)
+
 
 class modelFunc(tf.keras.Model):
     """Converts a standard tf.keras.Model to a model compatible with odeint."""
@@ -29,6 +30,7 @@ class modelFunc(tf.keras.Model):
         if len(x.shape) == 1:
             return self.model(tf.expand_dims(x, axis=0))[0]
         return self.model(x)
+
 
 class RunningAverageMeter():
     """Computes and stores the average and current value"""
@@ -47,6 +49,7 @@ class RunningAverageMeter():
         else:
             self.avg = self.avg * self.momentum + val * (1 - self.momentum)
         self.val = val
+
 
 def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     """Creates a dataset with n_series data series that are each simulated for samples_per_series
@@ -96,6 +99,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
         np.save('experiments/datasets/mass_spring_damper_y_val.npy', y_val)
     return x_train, y_train, x_val, y_val
 
+
 def load_dataset():
     x_train = np.load('experiments/datasets/mass_spring_damper_x_train.npy').astype(np.float32)
     y_train = np.load('experiments/datasets/mass_spring_damper_y_train.npy').astype(np.float32)
@@ -117,11 +121,7 @@ def my_mse(y_true, y_pred):
 
 def total_energy(state, k=1, m=1):
     """Calculates total energy of a mass-spring-damper system given a state."""
-    if len(state.shape) == 1:
-        return 0.5*k*state[0]*state[0]+0.5*m*state[1]*state[1]
-    if len(state.shape) == 2:
-        return 0.5*k*state[:, 0]*state[:, 0]+0.5*m*state[:, 1]*state[:, 1]
-    raise ValueError('NDIM must be 1 or 2 but is {}'.format(len(state.shape)))
+    return 0.5*k*state[..., 0]*state[..., 0]+0.5*m*state[..., 1]*state[..., 1]
 
 
 def relative_energy_drift(x_pred, x_true, t=-1):
@@ -173,19 +173,13 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     t = tf.linspace(0., 10., int(10./dt)+1)
     # Compute the predicted trajectories
     if ode_model:
-        if latent: # NODE-e2e model
-            x0_extrap = tf.stack([x_val[0, 0]])
-            x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-            x0_interp = tf.stack([x_val[1, 0]])
-            x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-        else:  # regular (Dense or NODE-Net) model
-            x0_extrap = tf.stack(x_val[0, 0])
-            x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()
-            x0_interp = tf.stack(x_val[1, 0])
-            x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()
+        x0_extrap = tf.stack([x_val[0, 0]])
+        x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
+        x0_interp = tf.stack([x_val[1, 0]])
+        x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
     else: # LSTM model
         x_t_extrap = np.zeros((1001, 2))
-        x_t_extrap[0] = [1.0, 0.]#x_val[0, 0]
+        x_t_extrap[0] = x_val[0, 0]
         x_t_interp = np.zeros((1001, 2))
         x_t_interp[0] = x_val[1, 0]
         # Always injects the entire time series because keras is slow when using
@@ -193,15 +187,13 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         # before it anyways.
         if is_mdn:
             for i in range(1, len(t)):
-                pred = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-                x_t_extrap[i:i+1] = mdn.sample_from_output(pred.numpy()[0], 2, 5, temp=1.)
-            for i in range(1, len(t)):
-                pred = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
-                x_t_interp[i:i+1] = mdn.sample_from_output(pred.numpy()[0], 2, 5, temp=1.0)
+                pred_extrap = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
+                x_t_extrap[i:i+1] = mdn.sample_from_output(pred_extrap.numpy()[0], 2, 5, temp=1.)
+                pred_interp = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
+                x_t_interp[i:i+1] = mdn.sample_from_output(pred_interp.numpy()[0], 2, 5, temp=1.)
         else:
             for i in range(1, len(t)):
                 x_t_extrap[i:i+1] = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-            for i in range(1, len(t)):
                 x_t_interp[i:i+1] = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
 
     x_t = np.stack([x_t_extrap, x_t_interp], axis=0)
@@ -242,27 +234,24 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     steps = 61
     y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
     ref_func = Lambda()
-    dydt_ref = ref_func(0., tf.convert_to_tensor(np.stack([x, y], -1).reshape(steps * steps, 2))).numpy()
-    mag_ref = 1e-8+np.sqrt(dydt_ref[:, 0]**2 + dydt_ref[:, 1]**2).reshape(-1, 1)
+    dydt_ref = ref_func(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
+    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 2)
+
     if ode_model:
-        dydt = model(0., tf.convert_to_tensor(np.stack([x, y], -1).reshape(steps * steps, 2))).numpy()
+        dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
     else:
         # Compute artificial x_dot by numerically diffentiating:
         # x_dot \approx (x_{t+1}-x_t)/dt
-        if is_mdn:
-            yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
+        yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
+        if is_mdn: # have to sample from output Gaussians
             yt_1 = np.apply_along_axis(mdn.sample_from_output, 1, yt_1.numpy(), 2, 5, temp=.1)[:,0]
-        else:
-            yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
         dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
 
-    abs_dydt = dydt.reshape(steps, steps, 2)
-    mag = np.sqrt(dydt[:, 0]**2 + dydt[:, 1]**2).reshape(-1, 1)
-    dydt = (dydt / mag) # make unit vector
-    dydt = dydt.reshape(steps, steps, 2)
+    dydt_abs = dydt.reshape(steps, steps, 2)
+    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True) # make unit vector
 
-    ax_vecfield.streamplot(x, y, dydt[:, :, 0], dydt[:, :, 1], color="black")
+    ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)
     ax_vecfield.set_ylim(-6, 6)
 
@@ -271,22 +260,19 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vec_error_abs.set_xlabel('x')
     ax_vec_error_abs.set_ylabel('x_dt')
 
-    x_dif = abs_dydt[:, :, 0]-dydt_ref[:, :, 0]
-    y_dif = abs_dydt[:, :, 1]-dydt_ref[:, :, 1]
-    abs_dif = np.clip(np.sqrt(x_dif**2 + y_dif**2), 0., 3.)
+    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.) # clip for visualization
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
 
     ax_vec_error_abs.set_xlim(-6, 6)
     ax_vec_error_abs.set_ylim(-6, 6)
 
-
     ax_vec_error_rel.cla()
     ax_vec_error_rel.set_title('Rel. error of xdot')
     ax_vec_error_rel.set_xlabel('x')
     ax_vec_error_rel.set_ylabel('x_dt')
 
-    rel_dif = np.clip(abs_dif / mag_ref.reshape(steps, steps), 0., 1.)
+    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
     c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
     plt.colorbar(c2, ax=ax_vec_error_rel)
 

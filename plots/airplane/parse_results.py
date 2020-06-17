@@ -1,6 +1,6 @@
+import os
 import pandas as pd
 import numpy as np
-import os
 
 def parse_filename(file):
     name = file.split('results')[-1]
