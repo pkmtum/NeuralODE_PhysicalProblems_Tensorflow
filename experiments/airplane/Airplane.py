@@ -9,7 +9,7 @@ class Airplane(tf.keras.Model):
     def __init__(self, x0=0.):
         """
         # Arguments:
-            x0: tf.Tensor, shape=(1, 4), state at x_0
+            x0: tf.Tensor, shape=(4,), state at x_0
         """
         self.x = x0
         self.A = tf.constant([[-0.01, -0.49, -0.046, -0.001],
@@ -24,10 +24,10 @@ class Airplane(tf.keras.Model):
 
         # Arguments
             t: Float - current time, irrelevant
-            x: tf.Tensor, shape=(4) - states of system
+            x: tf.Tensor, shape=(4,) - states of system
 
         # Returns:
-            dx: tf.Tensor, shape=(4) - time derivatives of the system
+            dx: tf.Tensor, shape=(4,) - time derivatives of the system
         """
 
         dx = tf.matmul(self.A, tf.expand_dims(x, -1))[..., 0]
@@ -44,7 +44,7 @@ class Airplane(tf.keras.Model):
                            The integrator may decide to use more steps to achieve the
                            set tolerance.
         # Returns:
-            x: tf.Tensor, shape=(4) - new state of the system
+            x: tf.Tensor, shape=(4,) - new state of the system
         """
         t = tf.linspace(0., dt, n_steps)
         self.x = odeint(self.call, self.x, t, *args, **kwargs)

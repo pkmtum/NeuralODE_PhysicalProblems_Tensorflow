@@ -9,15 +9,19 @@ import matplotlib.pyplot as plt
 from tfdiffeq import odeint
 from Airplane import Airplane
 
+
 class Lambda(tf.keras.Model):
+
     def __init__(self):
         super(Lambda, self).__init__()
         self.A = tf.constant([[-0.01, -0.49, -0.046, -0.001],
                               [0.11, 0.0003, 1.14, 0.043],
                               [-0.11, 0.0003, -1.14, 0.957],
                               [0.1, 0.0, -15.34, -3.00]])
+
     def call(self, t, y):
         return tf.matmul(tf.cast(self.A, y.dtype), tf.expand_dims(y, -1))[..., 0]
+
 
 class modelFunc(tf.keras.Model):
     """Converts a standard tf.keras.Model to a model compatible with odeint."""
@@ -27,9 +31,8 @@ class modelFunc(tf.keras.Model):
         self.model = model
 
     def call(self, t, x):
-        if len(x.shape) == 1:
-            return self.model(tf.expand_dims(x, axis=0))[0]
         return self.model(x)
+
 
 class RunningAverageMeter():
     """Computes and stores the average and current value"""
@@ -49,6 +52,7 @@ class RunningAverageMeter():
             self.avg = self.avg * self.momentum + val * (1 - self.momentum)
         self.val = val
 
+
 def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     """Creates a dataset with n_series data series that are each simulated for samples_per_series
     time steps. The timesteps are delta_t seconds apart.
@@ -66,7 +70,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     delta_t = 0.1
     x_train = []
     y_train = []
-    x0 = (2*tf.random.uniform((n_series, 4))-1)
+    x0 = (2 * tf.random.uniform((n_series, 4)) - 1)
     for i in range(n_series):
         airplane = Airplane(x0=x0[i])
         with tf.device('/gpu:0'):
@@ -97,6 +101,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
         np.save('experiments/datasets/airplane_x_val.npy', x_val)
         np.save('experiments/datasets/airplane_y_val.npy', y_val)
     return x_train, y_train, x_val, y_val
+
 
 def load_dataset():
     x_train = np.load('experiments/datasets/airplane_x_train.npy').astype(np.float32)
@@ -230,7 +235,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         dydt = (np.array(yt_1)-input_grid.reshape(steps * steps, 4)) / dt
 
     dydt_abs = dydt.reshape(steps, steps, 4)
-    dydt_unit = dydt / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
+    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
 
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)
@@ -240,7 +245,6 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vec_error_abs.set_title('Abs. error of V\', gamma\'')
     ax_vec_error_abs.set_xlabel('V')
     ax_vec_error_abs.set_ylabel('gamma')
-
     abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
@@ -298,6 +302,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     fd = open(file_path, 'a')
     fd.write(string)
     fd.close()
+
 
 def zero_crossings(x):
     """Find indices of zeros crossings"""
