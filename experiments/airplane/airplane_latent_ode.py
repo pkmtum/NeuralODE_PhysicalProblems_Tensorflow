@@ -12,7 +12,7 @@ from utils import create_dataset, load_dataset, makedirs, RunningAverageMeter, v
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
     gpus[0],
-    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=512)])
+    [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=256)])
 
 parser = argparse.ArgumentParser('ODE demo')
 parser.add_argument('--method', type=str, choices=['dopri5', 'adams'], default='dopri5')
@@ -26,8 +26,11 @@ parser.add_argument('--test_freq', type=int, default=20)
 parser.add_argument('--viz', action='store_true')
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--adjoint', type=eval, default=False)
+parser.add_argument('--dtype', type=str, choices=['float32', 'float64'], default='float32')
 parser.set_defaults(viz=True)
 args = parser.parse_args()
+
+tf.keras.backend.set_floatx(args.dtype)
 
 if args.adjoint:
     from tfdiffeq import odeint_adjoint as odeint
@@ -38,17 +41,22 @@ PLOT_DIR = 'plots/airplane/learnedode/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
-t = tf.linspace(0., 10., args.data_size)
+t = tf.linspace(0., 100., args.data_size)
+if args.dtype == 'float64':
+    t = tf.cast(t, tf.float64)
 
 if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
     x_train, _, x_val, _ = create_dataset()
 x_train, _, x_val, _ = load_dataset()
+x_train = x_train.astype(args.dtype)
+x_val = x_val.astype(args.dtype)
 
 x_val_extrap = tf.convert_to_tensor(x_val[0].reshape(-1, 1, 4))
 x_val_interp = tf.convert_to_tensor(x_val[1].reshape(-1, 1, 4))
 
 if args.viz:
     makedirs(PLOT_DIR)
+
 
 def get_batch():
     # pick random data series
@@ -61,11 +69,12 @@ def get_batch():
         np.arange(args.data_size - args.batch_time,
                   dtype=np.int64), args.batch_size,
         replace=False)
-
+        
     batch_x0 = tf.convert_to_tensor(x_train[n, s])  # (M, D)
     batch_t = t[:args.batch_time]  # (T)
     batch_x = tf.stack([x_train[n, s + i] for i in range(args.batch_time)], axis=0)  # (T, M, D)
     return batch_x0, batch_t, batch_x
+
 
 class ODEFunc(tf.keras.Model):
 
@@ -84,6 +93,7 @@ class ODEFunc(tf.keras.Model):
         return y
 
 if __name__ == '__main__':
+
     end = time.time()
 
     time_meter = RunningAverageMeter(0.97)
@@ -91,7 +101,7 @@ if __name__ == '__main__':
     with tf.device(device):
         func = ODEFunc()
         lr = tf.Variable(args.lr)
-        optimizer = tf.keras.optimizers.Adam(lr)
+        optimizer = tf.keras.optimizers.Adam(lr, clipvalue=0.5)
 
         for itr in range(1, args.niters + 1):
             with tf.GradientTape() as tape:
@@ -100,10 +110,11 @@ if __name__ == '__main__':
                 ex_loss = tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1)
                 loss = tf.reduce_mean(ex_loss)
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
-                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 0.00001
+                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 0.001
                 loss = loss + l2_loss
 
             grads = tape.gradient(loss, func.trainable_variables)
+            print(max([tf.reduce_max(tf.math.abs(grad)).numpy() for grad in grads]))
             grad_vars = zip(grads, func.trainable_variables)
             optimizer.apply_gradients(grad_vars)
             time_meter.update(time.time() - end)
@@ -114,10 +125,11 @@ if __name__ == '__main__':
                 pred_x_interp = odeint(func, x_val_interp[0], t)
                 loss_extrap = tf.reduce_mean(tf.abs(pred_x_extrap - x_val_extrap))
                 loss_interp = tf.reduce_mean(tf.abs(pred_x_interp - x_val_interp))
-                print('Iter {:04d} | Traj. Loss ex.: {:.6f} | Traj. Loss in.: {:.6f} | Time for batch {:,.4f}'.format(itr,
-                                                                                                                      loss_extrap.numpy(),
-                                                                                                                      loss_interp.numpy(),
-                                                                                                                      time_meter.avg))
+                print('Iter {:04d} | Traj. Loss ex.: {:.6f}'
+                      'Traj. Loss in.: {:.6f} | Seconds/batch {:,.4f}'.format(itr,
+                                                                              loss_extrap.numpy(),
+                                                                              loss_interp.numpy(),
+                                                                              time_meter.avg))
                 visualize(func, np.array(x_val), PLOT_DIR, TIME_OF_RUN, args,
                           ode_model=True, latent=True, epoch=itr)
             if itr == int(args.niters*0.5): # aligns with the other datasets

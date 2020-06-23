@@ -136,12 +136,16 @@ def relative_phase_error(x_pred, x_val):
     t_ref = np.mean(np.diff(ref_crossings)) * 2
     t_pred = np.mean(np.diff(pred_crossings)) * 2
     phase_error_lp = t_ref/t_pred - 1
+    if len(pred_crossings) < len(ref_crossings) - 2:
+        phase_error_lp = np.nan
     # short period
     ref_crossings = zero_crossings(x_val[:, 2])
     pred_crossings = zero_crossings(x_pred[:, 2])
     t_ref = np.mean(np.diff(ref_crossings)) * 2
     t_pred = np.mean(np.diff(pred_crossings)) * 2
     phase_error_sp = t_ref/t_pred - 1
+    if len(pred_crossings) < len(ref_crossings) - 2:
+        phase_error_sp = np.nan
     return phase_error_lp, phase_error_sp
 
 
@@ -190,7 +194,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vecfield = fig.add_subplot(233, frameon=False)
     ax_vec_error_abs = fig.add_subplot(234, frameon=False)
     ax_vec_error_rel = fig.add_subplot(235, frameon=False)
-    ax_energy = fig.add_subplot(236, frameon=False)
+    ax_3d = fig.add_subplot(236, projection='3d')
     ax_traj.cla()
     ax_traj.set_title('Trajectories')
     ax_traj.set_xlabel('t')
@@ -238,8 +242,8 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
 
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
-    ax_vecfield.set_xlim(-6, 6)
-    ax_vecfield.set_ylim(-6, 6)
+    ax_vecfield.set_xlim(-4, 4)
+    ax_vecfield.set_ylim(-2, 2)
 
     ax_vec_error_abs.cla()
     ax_vec_error_abs.set_title('Abs. error of V\', gamma\'')
@@ -264,10 +268,14 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vec_error_rel.set_xlim(-6, 6)
     ax_vec_error_rel.set_ylim(-6, 6)
 
-    # ax_energy.cla()
-    # ax_energy.set_title('Total Energy')
-    # ax_energy.set_xlabel('t')
-    # ax_energy.plot(np.arange(1001)/100.1, np.array([total_energy(x_) for x_ in x_t_interp]))
+    ax_3d.cla()
+    ax_3d.set_title('3D Trajectory')
+    ax_3d.set_xlabel('V')
+    ax_3d.set_ylabel('gamma')
+    ax_3d.set_zlabel('alpha')
+    ax_3d.scatter(x_val[0, :, 0], x_val[0, :, 1], x_val[0, :, 2], c='g', s=4, marker='^')
+    ax_3d.scatter(x_t[0, :, 0], x_t[0, :, 1], x_t[0, :, 2], c='b', s=4, marker='o')
+    ax_3d.view_init(elev=40., azim=60.)
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
     plt.close()

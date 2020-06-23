@@ -65,6 +65,7 @@ class TrainDatagen(tf.keras.utils.Sequence):
 model = Sequential()
 model.add(LSTM(32, kernel_regularizer=l2(0.00001), return_sequences=True,
                input_shape=(None, x_train.shape[-1],)))
+model.add(LSTM(32, kernel_regularizer=l2(0.00001), return_sequences=True))
 model.add(Dense(y_train.shape[-1], activation=None, kernel_regularizer=l2(0.00001)))
 adam = Adam(lr=args.lr)
 
@@ -77,7 +78,7 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
 
-epoch_multi = 20
+epoch_multi = 10
 def lr_scheduler(epoch):
     if epoch < 5*epoch_multi:
         return args.lr

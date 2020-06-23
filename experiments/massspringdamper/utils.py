@@ -149,6 +149,8 @@ def relative_phase_error(x_pred, x_val):
     t_ref = np.mean(np.diff(ref_crossings)) * 2
     t_pred = np.mean(np.diff(pred_crossings)) * 2
     phase_error = t_ref/t_pred - 1
+    if len(pred_crossings) < len(ref_crossings) - 2:
+        phase_error = np.nan
     return phase_error
 
 
