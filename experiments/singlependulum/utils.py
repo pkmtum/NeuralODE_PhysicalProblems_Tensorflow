@@ -66,15 +66,12 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     theta0_in = np.random.random((n_series//2))
     theta0_out = np.random.random((n_series-n_series//2)) + np.pi - 1
     theta0 = np.concatenate([theta0_in, theta0_out])
-    x_train = []
-    y_train = []
-    for i in range(n_series):
-        pendulum = SinglePendulum(theta=theta0[i])
-        with tf.device('/gpu:0'):
-            x_train.append(pendulum.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
-            y_train.append(np.array(pendulum.call(0., x_train[-1])))
-    x_train = np.stack(x_train)
-    y_train = np.stack(y_train)
+    pendulum = SinglePendulum(theta=theta0, theta_dt=tf.zeros_like(theta0)) # compute all trajectories at once
+    with tf.device('/gpu:0'):
+        x_train = pendulum.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series)
+        y_train = np.array(pendulum.call(0., x_train))
+    x_train = np.transpose(x_train, [1, 0, 2])
+    y_train = np.transpose(y_train, [1, 0, 2])
 
     pendulum = SinglePendulum(theta=1.5, theta_dt=0.5)
     with tf.device('/gpu:0'):
@@ -136,7 +133,7 @@ def relative_phase_error(x_pred, x_val):
     t_pred = np.mean(np.diff(pred_crossings)) * 2
     phase_error = t_ref/t_pred - 1
     if len(pred_crossings) < len(ref_crossings) - 2:
-        phase_error = np.nan    
+        phase_error = np.nan
     return phase_error
 
 
@@ -156,9 +153,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         args: input arguments from main script
     """
     x_val = x_val.reshape(-1, 2)
-
     dt = 0.01
     t = tf.linspace(0., 10., int(10./dt)+1)
+    # Compute the predicted trajectories
     if ode_model:
         x0 = tf.stack([[1.5, .5]])
         x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
@@ -209,11 +206,13 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
         dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
     else: # is LSTM
+        # Compute artificial x_dot by numerically diffentiating:
+        # x_dot \approx (x_{t+1}-x_t)/dt
         yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
         dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
 
     dydt_abs = dydt.reshape(steps, steps, 2)
-    dydt_unit = dydt / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
+    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
 
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)

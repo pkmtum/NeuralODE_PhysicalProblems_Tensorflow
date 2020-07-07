@@ -10,19 +10,6 @@ from tfdiffeq import odeint
 from Airplane import Airplane
 
 
-class Lambda(tf.keras.Model):
-
-    def __init__(self):
-        super(Lambda, self).__init__()
-        self.A = tf.constant([[-0.01, -0.49, -0.046, -0.001],
-                              [0.11, 0.0003, 1.14, 0.043],
-                              [-0.11, 0.0003, -1.14, 0.957],
-                              [0.1, 0.0, -15.34, -3.00]])
-
-    def call(self, t, y):
-        return tf.matmul(tf.cast(self.A, y.dtype), tf.expand_dims(y, -1))[..., 0]
-
-
 class modelFunc(tf.keras.Model):
     """Converts a standard tf.keras.Model to a model compatible with odeint."""
 
@@ -68,8 +55,6 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
 
     """
     delta_t = 0.1
-    x_train = []
-    y_train = []
     x0 = (2 * tf.random.uniform((n_series, 4)) - 1)
     for i in range(n_series):
         airplane = Airplane(x0=x0[i])
@@ -226,7 +211,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
     zeros = tf.zeros_like(x)
     input_grid = np.stack([x, y, zeros, zeros], -1)
-    ref_func = Lambda()
+    ref_func = Airplane()
     dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 4)).numpy()
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 4)

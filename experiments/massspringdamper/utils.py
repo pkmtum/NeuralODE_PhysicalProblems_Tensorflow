@@ -69,26 +69,23 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     x0_in = np.random.random((n_series//2))
     x0_out = np.random.random((n_series-n_series//2)) + np.pi - 1
     x0 = np.concatenate([x0_in, x0_out])
-    x_train = []
-    y_train = []
-    for i in range(n_series):
-        msd = MassSpringDamper(x=x0[i])
-        with tf.device('/gpu:0'):
-            x_train.append(msd.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
-            y_train.append(np.array(msd.call(0., x_train[-1])))
-    x_train = np.stack(x_train)
-    y_train = np.stack(y_train)
+    msd = MassSpringDamper(x=x0, x_dt=tf.zeros_like(x0)) # compute all trajectories at once
+    with tf.device('/gpu:0'):
+        x_train = msd.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series)
+        y_train = np.array(msd.call(0., x_train))
+    x_train = np.transpose(x_train, [1, 0, 2])
+    y_train = np.transpose(y_train, [1, 0, 2])
 
     x_val = []
     y_val = []
     msd = MassSpringDamper(x=5., x_dt=0.5)
     with tf.device('/gpu:0'):
         x_val.append(msd.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
-        y_val.append(np.array([msd.call(0., x_val[-1])]))
+        y_val.append(np.array(msd.call(0., x_val[-1])))
     msd = MassSpringDamper(x=1.5, x_dt=0.5)
     with tf.device('/gpu:0'):
         x_val.append(msd.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
-        y_val.append(np.array([msd.call(0., x_val[-1])]))
+        y_val.append(np.array(msd.call(0., x_val[-1])))
     x_val = np.stack(x_val)
     y_val = np.stack(y_val)
 
