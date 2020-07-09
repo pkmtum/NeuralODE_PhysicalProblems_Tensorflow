@@ -3,7 +3,7 @@ import tensorflow as tf
 
 class AirplaneLatLong(tf.keras.Model):
     """Class that provides a longitudinal motion model of a Boeing B777.
-    State has the following structure: (V*, gamma, alpha, q).T
+    State has the following structure: (V*, gamma, alpha, q, r, beta, p, phi).T
     """
 
     def __init__(self, x0=0.):
@@ -22,9 +22,7 @@ class AirplaneLatLong(tf.keras.Model):
                               [0., 0., 0., 0., 0.91, -18.8, -0.65, 0.],
                               [0., 0., 0., 0., 0., 0., 1., 0.]])
 
-
-
-    # @tf.function
+    @tf.function
     def call(self, t, x):
         """
         Returns time-derivatives of the system.

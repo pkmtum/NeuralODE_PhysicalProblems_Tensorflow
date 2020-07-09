@@ -52,7 +52,7 @@ np.random.shuffle(c)
 x_train = x_train[c[::int(100/args.dataset_size)]]
 y_train = y_train[c[::int(100/args.dataset_size)]]
 
-l2_penalty = 1e-6# * 0
+l2_penalty = 1e-6
 model = Sequential()
 model.add(Dense(64, 'sigmoid', kernel_regularizer=l2(l2_penalty),
                 input_shape=(data_dim,)))
@@ -92,10 +92,3 @@ for epoch in range(10):
     if args.viz:
         visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
                   ode_model=True, epoch=(epoch+1)*epoch_multi)
-    with tf.GradientTape(persistent=True) as g:
-        x = tf.zeros(shape=(1, 8))
-        g.watch(x)
-        y = model(x)
-    jac = g.jacobian(y, x)[0, :, 0]
-    np.set_printoptions(suppress=True, precision=4)
-    print(jac.numpy())

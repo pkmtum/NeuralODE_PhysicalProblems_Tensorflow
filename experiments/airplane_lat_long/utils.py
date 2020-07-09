@@ -10,6 +10,22 @@ from tfdiffeq import odeint
 from AirplaneLatLong import AirplaneLatLong
 
 
+class Lambda(tf.keras.Model):
+
+    def __init__(self):
+        super(Lambda, self).__init__()
+        self.A = tf.constant([[-0.01, -0.49, -0.046, -0.001, 0., 0., 0., 0.],
+                              [0.11, 0.0003, 1.14, 0.043, 0., 0., 0., 0.],
+                              [-0.11, 0.0003, -1.14, 0.957, 0., 0., 0., 0.],
+                              [0.1, 0.0, -15.34, -3.00, 0., 0., 0., 0.],
+                              [0., 0., 0., 0., -0.87, 6.47, -0.41, 0.],
+                              [0., 0., 0., 0., -1, -0.38, 0, 0.07],
+                              [0., 0., 0., 0., 0.91, -18.8, -0.65, 0.],
+                              [0., 0., 0., 0., 0., 0., 1., 0.]])
+
+    def call(self, t, y):
+        return tf.matmul(tf.cast(self.A, y.dtype), tf.expand_dims(y, -1))[..., 0]
+
 class modelFunc(tf.keras.Model):
     """Converts a standard tf.keras.Model to a model compatible with odeint."""
 
@@ -40,7 +56,7 @@ class RunningAverageMeter():
         self.val = val
 
 
-def create_dataset(n_series=51, samples_per_series=10001, save_to_disk=True):
+def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     """Creates a dataset with n_series data series that are each simulated for samples_per_series
     time steps. The timesteps are delta_t seconds apart.
     # Arguments:
@@ -54,8 +70,7 @@ def create_dataset(n_series=51, samples_per_series=10001, save_to_disk=True):
         y_val: np.ndarray, shape=(n_series, samples_per_series, 8)
 
     """
-    #TODO: new datasize?
-    delta_t = 0.01
+    delta_t = 0.1
     x0 = (2 * tf.random.uniform((n_series, 8)) - 1)
     airplane = AirplaneLatLong(x0=x0) # compute all trajectories at once
     with tf.device('/gpu:0'):
@@ -130,15 +145,27 @@ def relative_phase_error(x_pred, x_val):
     phase_error_sp = t_ref/t_pred - 1
     if len(pred_crossings) < len(ref_crossings) - 2:
         phase_error_sp = np.nan
-    return phase_error_lp, phase_error_sp
+    # laterals
+    ref_crossings = zero_crossings(x_val[:, 5])
+    pred_crossings = zero_crossings(x_pred[:, 5])
+    t_ref = np.mean(np.diff(ref_crossings)) * 2
+    t_pred = np.mean(np.diff(pred_crossings)) * 2
+    phase_error_lat_r = t_ref/t_pred - 1
+
+    ref_crossings = zero_crossings(x_val[:, 7])
+    pred_crossings = zero_crossings(x_pred[:, 7])
+    t_ref = np.mean(np.diff(ref_crossings)) * 2
+    t_pred = np.mean(np.diff(pred_crossings)) * 2
+    phase_error_lat_p = t_ref/t_pred - 1
+    return phase_error_lp, phase_error_sp, phase_error_lat_r, phase_error_lat_p
 
 
 def trajectory_error(x_pred, x_val):
-    return np.mean(np.abs(x_pred - x_val))
+    return np.mean(np.abs(x_pred[..., :4] - x_val[..., :4]))
 
 
-def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=False, epoch=0, is_mdn=False):
-    """Visualize a tf.keras.Model for a single pendulum.
+def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0, is_mdn=False):
+    """Visualize a tf.keras.Model for a 8-dof airplane model.
     # Arguments:
         model: A Keras model, that accepts t and x when called
         x_val: np.ndarray, shape=(1, samples_per_series, 8) or (samples_per_series, 8)
@@ -151,14 +178,14 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     """
     data_dim = 8
     x_val = x_val.reshape(2, -1, data_dim)
-    dt = 0.01
+    dt = 0.1
     t = tf.linspace(0., 100., int(100/dt)+1)
     # Compute the predicted trajectories
     if ode_model:
-        x0_extrap = tf.stack([x_val[0, 0]])
-        x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-        x0_interp = tf.stack([x_val[1, 0]])
-        x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
+        x0 = tf.convert_to_tensor(x_val[:, 0])
+        x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()
+        x_t_extrap = x_t[:, 0]
+        x_t_interp = x_t[:, 1]
     else: # LSTM model
         x_t_extrap = np.zeros_like(x_val[0])
         x_t_extrap[0] = x_val[0, 0]
@@ -238,7 +265,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
     zeros = tf.zeros_like(x)
     input_grid = np.stack([x, y, zeros, zeros, zeros, zeros, zeros, zeros], -1)
-    ref_func = AirplaneLatLong()
+    ref_func = Lambda()
     dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 8)).numpy()
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, data_dim)
@@ -295,7 +322,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_3d_lat.set_zlabel('p')
     ax_3d_lat.scatter(x_val[0, :, 4], x_val[0, :, 5], x_val[0, :, 6], c='g', s=4, marker='^')
     ax_3d_lat.scatter(x_t[0, :, 4], x_t[0, :, 5], x_t[0, :, 6], c='b', s=4, marker='o')
-    ax_3d_lat.view_init(elev=1., azim=110.)
+    ax_3d_lat.view_init(elev=1., azim=90.)
 
 
     fig.tight_layout()
@@ -303,19 +330,21 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     plt.close()
 
     # Compute Metrics
-    phase_error_extrap_lp_long, phase_error_extrap_sp_long = relative_phase_error(x_t[0], x_val[0])
+    pe_extrap_lp_long, pe_extrap_sp_long, pe_extrap_lat_r, pe_extrap_lat_p = relative_phase_error(x_t[0], x_val[0])
     traj_error_extrap = trajectory_error(x_t[0], x_val[0])
 
-    phase_error_interp_lp_long, phase_error_interp_sp_long = relative_phase_error(x_t[1], x_val[1])
+    pe_interp_lp_long, pe_interp_sp_long, pe_interp_lat_r, pe_interp_lat_p = relative_phase_error(x_t[1], x_val[1])
     traj_error_interp = trajectory_error(x_t[1], x_val[1])
 
 
     wall_time = (datetime.datetime.now()
                  - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
-    string = "{},{},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f}\n".format(
+    string = "{},{},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f}\n".format(
         wall_time, epoch,
-        phase_error_interp_lp_long, phase_error_interp_sp_long,
-        phase_error_extrap_lp_long, phase_error_extrap_sp_long,
+        pe_interp_lp_long, pe_interp_sp_long,
+        pe_extrap_lp_long, pe_extrap_sp_long,
+        pe_interp_lat_r, pe_extrap_lat_r,
+        pe_interp_lat_p, pe_extrap_lat_p,
         traj_error_interp, traj_error_extrap)
 
     file_path = (PLOT_DIR + TIME_OF_RUN + "results"
@@ -325,6 +354,8 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         title_string = ("wall_time,epoch,"
                         + "phase_error_interp_lp_long,phase_error_interp_sp_long,"
                         + "phase_error_extrap_lp_long,phase_error_extrap_sp_long,"
+                        + "phase_error_interp_lat_r,phase_error_extrap_lat_r,"
+                        + "phase_error_interp_lat_p,phase_error_extrap_lat_p,"
                         + "traj_err_interp, traj_err_extrap\n")
         fd = open(file_path, 'a')
         fd.write(title_string)
@@ -332,6 +363,23 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     fd = open(file_path, 'a')
     fd.write(string)
     fd.close()
+    if ode_model:
+        np.set_printoptions(suppress=True, precision=4, linewidth=150)
+        # Print Jacobian
+        jac = tf.zeros((8, 8))
+        for i in range(100):
+            with tf.GradientTape(persistent=True) as g:
+                x = (2 * tf.random.uniform((1, 8)) - 1)
+                g.watch(x)
+                y = model(0, x)
+            jac = jac + g.jacobian(y, x)[0, :, 0]
+        print(jac.numpy()/100)
+
+        with tf.GradientTape(persistent=True) as g:
+            x = tf.zeros([1, 8])
+            g.watch(x)
+            y = model(0, x)
+        print(g.jacobian(y, x)[0, :, 0])
 
 
 def zero_crossings(x):

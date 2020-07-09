@@ -10,6 +10,19 @@ from tfdiffeq import odeint
 from Airplane import Airplane
 
 
+class Lambda(tf.keras.Model):
+
+    def __init__(self):
+        super(Lambda, self).__init__()
+        self.A = tf.constant([[-0.01, -0.49, -0.046, -0.001],
+                              [0.11, 0.0003, 1.14, 0.043],
+                              [-0.11, 0.0003, -1.14, 0.957],
+                              [0.1, 0.0, -15.34, -3.00]])
+
+    def call(self, t, y):
+        return tf.matmul(tf.cast(self.A, y.dtype), tf.expand_dims(y, -1))[..., 0]
+
+
 class modelFunc(tf.keras.Model):
     """Converts a standard tf.keras.Model to a model compatible with odeint."""
 
@@ -56,14 +69,12 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     """
     delta_t = 0.1
     x0 = (2 * tf.random.uniform((n_series, 4)) - 1)
-    for i in range(n_series):
-        airplane = Airplane(x0=x0[i])
-        with tf.device('/gpu:0'):
-            x_train.append(airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
-            y_train.append(np.array(airplane.call(0., x_train[-1])))
-        print('Dataset generation: {:.0f} %'.format(100*i/n_series))
-    x_train = np.stack(x_train)
-    y_train = np.stack(y_train)
+    airplane = Airplane(x0=x0)
+    with tf.device('/gpu:0'):
+        x_train = airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
+        y_train = np.array(airplane.call(0., x_train))
+    x_train = np.transpose(x_train, [1, 0, 2])
+    y_train = np.transpose(y_train, [1, 0, 2])
 
     x_val = []
     y_val = []
@@ -138,8 +149,8 @@ def trajectory_error(x_pred, x_val):
     return np.mean(np.abs(x_pred - x_val))
 
 
-def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=False, epoch=0, is_mdn=False):
-    """Visualize a tf.keras.Model for a single pendulum.
+def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0, is_mdn=False):
+    """Visualize a tf.keras.Model for an aircraft model.
     # Arguments:
         model: A Keras model, that accepts t and x when called
         x_val: np.ndarray, shape=(1, samples_per_series, 4) or (samples_per_series, 4)
@@ -155,10 +166,10 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     t = tf.linspace(0., 100., int(100./dt)+1)
     # Compute the predicted trajectories
     if ode_model:
-        x0_extrap = tf.stack([x_val[0, 0]])
-        x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-        x0_interp = tf.stack([x_val[1, 0]])
-        x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
+        x0 = tf.convert_to_tensor(x_val[:, 0])
+        x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()
+        x_t_extrap = x_t[:, 0]
+        x_t_interp = x_t[:, 1]
     else: # LSTM model
         x_t_extrap = np.zeros((1001, 4))
         x_t_extrap[0] = x_val[0, 0]
@@ -211,7 +222,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
     zeros = tf.zeros_like(x)
     input_grid = np.stack([x, y, zeros, zeros], -1)
-    ref_func = Airplane()
+    ref_func = Lambda()
     dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 4)).numpy()
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 4)

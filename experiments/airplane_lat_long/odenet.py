@@ -33,6 +33,7 @@ else:
 MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 PLOT_DIR = 'plots/airplane_lat_long/odenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+l2_penalty = 1e-6
 
 if args.viz:
     makedirs(PLOT_DIR)
@@ -44,7 +45,7 @@ class ODEFunc(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.augment_dim = augment_dim
         self.time_dependent = time_dependent
-        self.dense1 = Dense(hidden_dim, activation='sigmoid', kernel_regularizer=l2(0.00001))
+        self.dense1 = Dense(hidden_dim, activation='relu', kernel_regularizer=l2(l2_penalty))
         self.nfe = tf.Variable(0., trainable=False)
         self.nbe = tf.Variable(0., trainable=False)
         self.t_vec = tf.ones(dtype=tf.float32, shape=[32, 1])
@@ -149,10 +150,10 @@ class ODENet(tf.keras.Model):
     def __init__(self, hidden_dim, output_dim):
         super(ODENet, self).__init__()
         self.output_dim = output_dim
-        self.dense1 = Dense(hidden_dim, 'relu', kernel_regularizer=l2(0.00001))
+        self.dense1 = Dense(hidden_dim, 'relu', kernel_regularizer=l2(l2_penalty))
         odefunc = ODEFunc(hidden_dim+0, augment_dim=0)
         self.odeblock = ODEBlock(odefunc, solver='dopri5')
-        self.dense2 = Dense(output_dim, kernel_regularizer=l2(0.00001))
+        self.dense2 = Dense(output_dim, kernel_regularizer=l2(l2_penalty))
 
     def call(self, x):
         out = self.dense1(x)
@@ -167,14 +168,14 @@ if not os.path.isfile('experiments/datasets/airplane_lat_long_x_train.npy'):
     x_train, y_train, x_val, y_val = create_dataset(n_series=51)
 x_train, y_train, x_val, y_val = load_dataset()
 print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
-x_train = np.reshape(x_train, (-1, 4))
-y_train = np.reshape(y_train, (-1, 4))
+x_train = np.reshape(x_train, (-1, x_train.shape[-1]))
+y_train = np.reshape(y_train, (-1, x_train.shape[-1]))
 
 x_val_extrap, y_val_extrap = x_val[0], y_val[0]
 x_val_interp, y_val_interp = x_val[1], y_val[1]
 
-x_val = np.reshape(x_val, (-1, 4))
-y_val = np.reshape(y_val, (-1, 4))
+x_val = np.reshape(x_val, (-1, x_train.shape[-1]))
+y_val = np.reshape(y_val, (-1, x_train.shape[-1]))
 
 c = np.arange(len(x_train))
 np.random.shuffle(c)
@@ -202,7 +203,8 @@ def lr_scheduler(epoch):
     return args.lr * 0.001
 
 learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
-
+model(tf.zeros(shape=(1,8)))
+model.summary()
 for epoch in range(10):
     model.fit(x_train, y_train,
               epochs=epoch_multi*(epoch+1),
@@ -218,8 +220,9 @@ for epoch in range(10):
                   ode_model=True, epoch=(epoch+1)*epoch_multi)
 
     with tf.GradientTape(persistent=True) as g:
-        x = tf.zeros(shape=(1, 4))
+        x = tf.zeros(shape=(1, 8))
         g.watch(x)
         y = model(x)
-    jacobian = g.jacobian(y, x)
-    print(jacobian)
+    jacobian = g.jacobian(y, x)[0, :, 0]
+    np.set_printoptions(suppress=True, precision=4)
+    print(jacobian.numpy())

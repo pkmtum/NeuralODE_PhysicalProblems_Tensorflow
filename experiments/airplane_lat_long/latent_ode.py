@@ -21,8 +21,8 @@ parser.add_argument('--dataset_size', type=int, choices=[100], default=100)
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--batch_time', type=int, default=16)
 parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--niters', type=int, default=20000)
-parser.add_argument('--test_freq', type=int, default=20)
+parser.add_argument('--niters', type=int, default=10000)
+parser.add_argument('--test_freq', type=int, default=500)
 parser.add_argument('--viz', action='store_true')
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--adjoint', type=eval, default=False)
@@ -81,8 +81,8 @@ class ODEFunc(tf.keras.Model):
     def __init__(self, **kwargs):
         super(ODEFunc, self).__init__(**kwargs)
 
-        self.x1 = tf.keras.layers.Dense(32, activation='relu')
-        self.x2 = tf.keras.layers.Dense(32, activation='relu')
+        self.x1 = tf.keras.layers.Dense(64, activation='sigmoid')
+        self.x2 = tf.keras.layers.Dense(64, activation='sigmoid')
         self.y = tf.keras.layers.Dense(x_train.shape[-1])
 
     @tf.function
@@ -130,7 +130,7 @@ if __name__ == '__main__':
                                                                               loss_interp.numpy(),
                                                                               time_meter.avg))
                 visualize(func, np.array(x_val), PLOT_DIR, TIME_OF_RUN, args,
-                          ode_model=True, latent=True, epoch=itr)
+                          ode_model=True, epoch=itr)
             if itr == int(args.niters*0.5): # aligns with the other datasets
                 optimizer.lr = optimizer.lr * 0.1
             if itr == int(args.niters*0.7):

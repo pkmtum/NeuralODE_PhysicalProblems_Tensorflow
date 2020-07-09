@@ -119,7 +119,7 @@ if __name__ == '__main__':
                                                                                                                       loss_interp.numpy(),
                                                                                                                       time_meter.avg))
                 visualize(func, np.array(x_val), PLOT_DIR, TIME_OF_RUN, args,
-                          ode_model=True, latent=True, epoch=itr)
+                          ode_model=True, epoch=itr)
             if itr == int(args.niters*0.5): # aligns with the other datasets
                 optimizer.lr = optimizer.lr * 0.1
             if itr == int(args.niters*0.7):
