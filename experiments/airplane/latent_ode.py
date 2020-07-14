@@ -51,8 +51,8 @@ x_train, _, x_val, _ = load_dataset()
 x_train = x_train.astype(args.dtype)
 x_val = x_val.astype(args.dtype)
 
-x_val_extrap = tf.convert_to_tensor(x_val[0].reshape(-1, 1, 4))
-x_val_interp = tf.convert_to_tensor(x_val[1].reshape(-1, 1, 4))
+x_val_extrap = tf.convert_to_tensor(x_val[0].reshape(-1, 1, x_train.shape[-1]))
+x_val_interp = tf.convert_to_tensor(x_val[1].reshape(-1, 1, x_train.shape[-1]))
 
 if args.viz:
     makedirs(PLOT_DIR)
@@ -110,7 +110,7 @@ if __name__ == '__main__':
                 ex_loss = tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1)
                 loss = tf.reduce_mean(ex_loss)
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
-                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights])*0# * 0.001
+                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights])*0
                 loss = loss + l2_loss
 
             grads = tape.gradient(loss, func.trainable_variables)
@@ -118,7 +118,6 @@ if __name__ == '__main__':
             optimizer.apply_gradients(grad_vars)
             time_meter.update(time.time() - end)
             loss_meter.update(loss.numpy())
-            t0t = time.time()
             if itr % args.test_freq == 0:
                 pred_x_extrap = odeint(func, x_val_extrap[0], t)
                 pred_x_interp = odeint(func, x_val_interp[0], t)

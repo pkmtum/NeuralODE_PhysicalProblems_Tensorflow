@@ -4,9 +4,9 @@ import numpy as np
 
 
 def pretty_print_latex(matrix):
-    """Prints matrix in a format that can be pasted into Latex"""
+    """Prints matrix in a format that can be pasted into LaTex"""
     row = ""
-    for loss in matrix[[3, 5, 2, 4, 7, 6, 10, 11]]:
+    for loss in matrix[[3, 5, 2, 4, 6, 7, 10, 11]]:
         if loss < 1e-2: # use scientific notation
             row += (" {0:.1e}          &".format(float(loss))).replace('-0', '-')
         else:
