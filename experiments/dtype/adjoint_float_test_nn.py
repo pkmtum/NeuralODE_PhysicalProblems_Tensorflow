@@ -12,6 +12,7 @@ dtypes = [tf.float32, tf.float64]
 tf.keras.backend.set_floatx('float64')
 
 class ODE(tf.keras.Model):
+
     def __init__(self, dtype):
         super(ODE, self).__init__(dtype=dtype)
         self.conv1 = tf.keras.layers.Conv2D(32, 3, activation='sigmoid')
@@ -35,15 +36,15 @@ class ODE(tf.keras.Model):
         dX_dT = self.dense2(x)
         return self.reshape(dX_dT)
 
-file_path = 'tests/adjoint_float_test_nn.csv'
+file_path = 'plots/dtype/adjoint_float_test_nn.csv'
 title_string = "dtype,rtol,method,error,fwd_pass,bwd_pass,nfe,nbe\n"
 fd = open(file_path, 'w')
 fd.write(title_string)
 fd.close()
 
-
+# Compute the reference gradient
 x_0_64 = tf.random.uniform([16, 14, 14, 8], dtype=tf.float64)#tf.constant([[1., 10.]], dtype=tf.float64)
-t = tf.cast(tf.linspace(0., 2., 2), dtype=tf.float64)
+t = tf.cast(tf.linspace(0., 2., 2), tf.float64)
 odemodel_exact = ODE(dtype=tf.float64)
 
 with tf.device('/gpu:0'):
@@ -63,8 +64,8 @@ for dtype in dtypes:
     else:
         tf.keras.backend.set_floatx('float64')
 
-    x_0 = tf.cast(x_0_64, dtype=dtype)
-    t = tf.cast(tf.linspace(0., 2., 2), dtype=dtype)
+    x_0 = tf.cast(x_0_64, dtype)
+    t = tf.cast(tf.linspace(0., 2., 2), dtype)
 
     odemodel = ODE(dtype=dtype)
     # build model
@@ -72,12 +73,13 @@ for dtype in dtypes:
     # set identical weights
     for layer, exact_layer in zip(odemodel.layers, odemodel_exact.layers):
         if hasattr(exact_layer, 'kernel'):
-            layer.kernel.assign(tf.cast(exact_layer.kernel, dtype=dtype))
+            layer.kernel.assign(tf.cast(exact_layer.kernel, dtype))
         if hasattr(exact_layer, 'bias'):
-            layer.bias.assign(tf.cast(exact_layer.bias, dtype=dtype))
+            layer.bias.assign(tf.cast(exact_layer.bias, dtype))
 
     for rtol in np.logspace(-13, 0, 14)[::-1]:
         print('rtol:', rtol)
+        # Don't run low tolerances with f32, they run for extremely long.
         if rtol <= 1e-11 and dtype == tf.float32:
             break
         with tf.device('/gpu:0'):
@@ -92,26 +94,29 @@ for dtype in dtypes:
             t3 = time.time()
             dYdX_adjoint = g.gradient(y_sol_adj, odemodel.trainable_variables)
             t4 = time.time()
-        max_adj = 0
+        # Compute relative error by finding the parameter set with the largest relative
+        # gradient L2-norm error.
+        rel_err_adj = 0
         for x, x_ex in zip(dYdX_adjoint, dYdX_exact):
-            max_adj = max((tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))).numpy(), max_adj)
+            rel_err_adj = max((tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))).numpy(), rel_err_adj)
 
-        max_bp = 0
+        rel_err_bp = 0
         for x, x_ex in zip(dYdX_backprop, dYdX_exact):
-            max_bp = max((tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))).numpy(), max_bp)
-        print('Adjoint:', max_adj, dtype)
-        print('Backprop:', max_bp, dtype)
+            rel_err_bp = max((tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))).numpy(), rel_err_bp)
+
+        print('Adjoint:', rel_err_adj, dtype)
+        print('Backprop:', rel_err_bp, dtype)
         fd = open(file_path, 'a')
         fd.write('{},{},adjoint,{},{},{},{},{}\n'.format(dtype,
                                                          rtol,
-                                                         max_adj,
+                                                         rel_err_adj,
                                                          t3-t2,
                                                          t4-t3,
                                                          odemodel.nfe.numpy(),
                                                          odemodel.nbe.numpy()))
         fd.write('{},{},backprop,{},{},{},{},{}\n'.format(dtype,
                                                           rtol,
-                                                          max_bp,
+                                                          rel_err_bp,
                                                           t1-t0,
                                                           t2-t1,
                                                           odemodel.nfe.numpy(),

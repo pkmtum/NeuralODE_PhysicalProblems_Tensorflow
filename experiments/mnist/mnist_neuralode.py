@@ -281,7 +281,6 @@ class Conv2dODEFunc(tf.keras.Model):
         self.augment_dim = augment_dim
         self.time_dependent = time_dependent
         self.nfe = tf.Variable(0., trainable=False)  # Number of function evaluations
-        self.nbe = tf.Variable(0., trainable=False)  # Number of function evaluations
         self.groups = groups if groups is not None else self.num_filters
         # Inits are weird to replicate PyTorch's initialization
         self.kernel_init = VarianceScaling(scale=1/3., distribution='uniform')
@@ -689,14 +688,11 @@ class NFENBECallback(tf.keras.callbacks.Callback):
     def on_train_batch_end(self, batch, logs=None):
         if args.network == 'odenet':
             nfe_ram.update(model.layers[9].nfe.numpy())
-            nbe_ram.update(model.layers[9].nbe.numpy())
 
     def on_epoch_end(self, epoch, logs=None):
         if args.network == 'odenet':
             print('\navg. NFE: ', nfe_ram.avg)
-            print('\navg. NBE: ', nbe_ram.avg)
             nfe_ram.reset()
-            nbe_ram.reset()
 
 model.predict(x_train[:1])  # Can't print summary without building the model first
 print(model.summary())

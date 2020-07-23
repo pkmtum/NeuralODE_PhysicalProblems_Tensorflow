@@ -81,8 +81,8 @@ class ODEFunc(tf.keras.Model):
     def __init__(self, **kwargs):
         super(ODEFunc, self).__init__(**kwargs)
 
-        self.x1 = tf.keras.layers.Dense(32, activation='relu')
-        self.x2 = tf.keras.layers.Dense(32, activation='relu')
+        self.x1 = tf.keras.layers.Dense(32, activation='softplus')
+        self.x2 = tf.keras.layers.Dense(32, activation='softplus')
         self.y = tf.keras.layers.Dense(4)
 
     @tf.function

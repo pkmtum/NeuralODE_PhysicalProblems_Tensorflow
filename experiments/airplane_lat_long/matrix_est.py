@@ -37,7 +37,7 @@ if args.adjoint:
 else:
     from tfdiffeq import odeint
 
-PLOT_DIR = 'plots/airplane_lat_long/learnedode/'
+PLOT_DIR = 'plots/airplane_lat_long/matrix_est/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 

@@ -81,12 +81,14 @@ class ODEFunc(tf.keras.Model):
     def __init__(self, **kwargs):
         super(ODEFunc, self).__init__(**kwargs)
 
-        self.x1 = tf.keras.layers.Dense(64, activation='relu')
-        self.x2 = tf.keras.layers.Dense(64, activation='relu')
+        self.x1 = tf.keras.layers.Dense(64, activation='softplus')
+        self.x2 = tf.keras.layers.Dense(64, activation='softplus')
         self.y = tf.keras.layers.Dense(x_train.shape[-1])
+        self.nfe = tf.Variable(0., trainable=False)
 
     @tf.function
     def call(self, t, y):
+        self.nfe.assign_add(1.)
         x = self.x1(y)
         x = self.x2(x)
         y = self.y(x)
@@ -107,19 +109,22 @@ if __name__ == '__main__':
             with tf.GradientTape() as tape:
                 batch_x0, batch_t, batch_x = get_batch()
                 pred_x = odeint(func, batch_x0, batch_t, method=args.method) # (T, B, D)
-                # ex_loss = tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1)
-                # loss = tf.reduce_mean(ex_loss)
+                ex_loss = tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1)
+                loss = tf.reduce_mean(ex_loss)
                 # Uncomment to try FFT-based loss
-                fft_batch = tf.signal.rfft(tf.transpose(batch_x, [0, 2, 1]))
-                fft_pred = tf.signal.rfft(tf.transpose(pred_x, [0, 2, 1]))
-                fft_diff = fft_batch-fft_pred
+                # fft_batch = tf.signal.rfft(tf.transpose(batch_x, [0, 2, 1]))
+                # fft_pred = tf.signal.rfft(tf.transpose(pred_x, [0, 2, 1]))
+                # fft_diff = fft_batch-fft_pred
                 # loss = tf.reduce_mean(tf.math.abs(fft_diff))
-                loss = tf.reduce_mean(tf.math.abs(fft_diff * tf.math.conj(fft_diff)))
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
-                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights])*0# * 1e-6
+                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 1e-6
                 loss = loss + l2_loss
-
+            nfe = func.nfe.numpy()
+            func.nfe.assign(0.)
             grads = tape.gradient(loss, func.trainable_variables)
+            nbe = func.nfe.numpy()
+            func.nfe.assign(0.)
+            print('NFE: {}, NBE: {}'.format(nfe, nbe))
             grad_vars = zip(grads, func.trainable_variables)
             optimizer.apply_gradients(grad_vars)
             time_meter.update(time.time() - end)
