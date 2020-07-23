@@ -36,7 +36,7 @@ for i in range(10000):
     z = tf.cast(y1, tf.float64)
 t2 = time()
 for i in range(10000):
-    z = tf.cast(y0, tf.float16)
+    z = tf.cast(y0, tf.float64)
 t3 = time()
 for i in range(10000):
     z = tf.cast(y1, tf.float32)

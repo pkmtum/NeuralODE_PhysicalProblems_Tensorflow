@@ -81,8 +81,8 @@ class ODEFunc(tf.keras.Model):
     def __init__(self, **kwargs):
         super(ODEFunc, self).__init__(**kwargs)
 
-        self.x1 = tf.keras.layers.Dense(64, activation='softplus')
-        self.x2 = tf.keras.layers.Dense(64, activation='softplus')
+        self.x1 = tf.keras.layers.Dense(64, activation='sigmoid')
+        self.x2 = tf.keras.layers.Dense(64, activation='sigmoid')
         self.y = tf.keras.layers.Dense(x_train.shape[-1])
         self.nfe = tf.Variable(0., trainable=False)
 
