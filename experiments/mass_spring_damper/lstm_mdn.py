@@ -76,8 +76,8 @@ adam = Adam(lr=args.lr)
 model.compile(loss=mdn.get_mixture_loss_func(OUTPUT_DIMS, N_MIXES), optimizer=adam)
 
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") \
-          + '|pendulum|lstm|' + str(args.dataset_size) + '|' + str(args.batch_time) \
-          + '|' + str(args.batch_size)
+          + '_pendulum_lstm_' + str(args.dataset_size) + '_' + str(args.batch_time) \
+          + '_' + str(args.batch_size)
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 

@@ -59,7 +59,7 @@ adam = Adam(lr=args.lr)
 model.compile(optimizer=adam, loss='mse', metrics=['mae', my_mse])
 
 log_dir = ("logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-           + '|msp|densenet|' + str(args.dataset_size))
+           + '_msp_densenet_' + str(args.dataset_size))
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
