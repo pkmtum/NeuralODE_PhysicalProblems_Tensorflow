@@ -117,8 +117,7 @@ def makedirs(dirname):
 
 def my_mse(y_true, y_pred):
     """Needed because Keras' MSE implementation includes L2 penalty """
-    squared_difference = tf.square(y_true - y_pred)
-    return tf.reduce_mean(squared_difference, axis=-1)
+    return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
 
 
 def relative_phase_error(x_pred, x_val):
@@ -269,6 +268,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 8)).numpy()
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, data_dim)
+
     if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
         dydt = model(0., input_grid.reshape(steps * steps, data_dim)).numpy()
     else: # is LSTM
@@ -324,7 +324,6 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     ax_3d_lat.scatter(x_t[0, :, 4], x_t[0, :, 5], x_t[0, :, 6], c='b', s=4, marker='o')
     ax_3d_lat.view_init(elev=1., azim=90.)
 
-
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
     plt.close()
@@ -363,9 +362,10 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     fd = open(file_path, 'a')
     fd.write(string)
     fd.close()
+
+    # Print Jacobian
     if ode_model:
         np.set_printoptions(suppress=True, precision=4, linewidth=150)
-        # Print Jacobian
         # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
         jac = tf.zeros((8, 8))
         for i in range(100):

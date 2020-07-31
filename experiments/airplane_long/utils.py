@@ -170,9 +170,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
         x_t_extrap = x_t[:, 0]
         x_t_interp = x_t[:, 1]
     else: # LSTM model
-        x_t_extrap = np.zeros((1001, 4))
+        x_t_extrap = np.zeros_like(x_val[0])
         x_t_extrap[0] = x_val[0, 0]
-        x_t_interp = np.zeros((1001, 4))
+        x_t_interp = np.zeros_like(x_val[1])
         x_t_interp[0] = x_val[1, 0]
         # Always injects the entire time series because keras is slow when using
         # varying series lengths and the future timesteps don't affect the predictions
@@ -225,6 +225,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 4)).numpy()
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 4)
+
     if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
         dydt = model(0., input_grid.reshape(steps * steps, 4)).numpy()
     else: # is LSTM
@@ -271,6 +272,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     ax_3d.scatter(x_val[0, :, 0], x_val[0, :, 1], x_val[0, :, 2], c='g', s=4, marker='^')
     ax_3d.scatter(x_t[0, :, 0], x_t[0, :, 1], x_t[0, :, 2], c='b', s=4, marker='o')
     ax_3d.view_init(elev=40., azim=60.)
+
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
     plt.close()
@@ -305,6 +307,25 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     fd = open(file_path, 'a')
     fd.write(string)
     fd.close()
+
+    # Print Jacobian
+    if ode_model:
+        np.set_printoptions(suppress=True, precision=4, linewidth=150)
+        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
+        jac = tf.zeros((4, 4))
+        for i in range(100):
+            with tf.GradientTape(persistent=True) as g:
+                x = (2 * tf.random.uniform((1, 4)) - 1)
+                g.watch(x)
+                y = model(0, x)
+            jac = jac + g.jacobian(y, x)[0, :, 0]
+        print(jac.numpy()/100)
+
+        with tf.GradientTape(persistent=True) as g:
+            x = tf.zeros([1, 4])
+            g.watch(x)
+            y = model(0, x)
+        print(g.jacobian(y, x)[0, :, 0])
 
 
 def zero_crossings(x):

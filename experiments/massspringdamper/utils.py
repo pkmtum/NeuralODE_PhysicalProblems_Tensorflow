@@ -27,8 +27,6 @@ class modelFunc(tf.keras.Model):
         self.model = model
 
     def call(self, t, x):
-        if len(x.shape) == 1:
-            return self.model(tf.expand_dims(x, axis=0))[0]
         return self.model(x)
 
 
@@ -112,8 +110,7 @@ def makedirs(dirname):
 
 def my_mse(y_true, y_pred):
     """Needed because Keras' MSE implementation includes L2 penalty """
-    squared_difference = tf.square(y_true - y_pred)
-    return tf.reduce_mean(squared_difference, axis=-1)
+    return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
 
 
 def total_energy(state, k=1, m=1):
@@ -177,9 +174,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         x0_interp = tf.stack([x_val[1, 0]])
         x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
     else: # LSTM model
-        x_t_extrap = np.zeros((1001, 2))
+        x_t_extrap = np.zeros_like(x_val[0])
         x_t_extrap[0] = x_val[0, 0]
-        x_t_interp = np.zeros((1001, 2))
+        x_t_interp = np.zeros_like(x_val[1])
         x_t_interp[0] = x_val[1, 0]
         # Always injects the entire time series because keras is slow when using
         # varying series lengths and the future timesteps don't affect the predictions
@@ -237,9 +234,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 2)
 
-    if ode_model:
+    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
         dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
-    else:
+    else: # is LSTM
         # Compute artificial x_dot by numerically diffentiating:
         # x_dot \approx (x_{t+1}-x_t)/dt
         yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
@@ -259,7 +256,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_vec_error_abs.set_xlabel('x')
     ax_vec_error_abs.set_ylabel('x_dt')
 
-    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.) # clip for visualization
+    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
 
@@ -282,6 +279,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     ax_energy.set_title('Total Energy')
     ax_energy.set_xlabel('t')
     ax_energy.plot(np.arange(1001)/100.1, np.array([total_energy(x_) for x_ in x_t_interp]))
+
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
     plt.close()
@@ -314,6 +312,26 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     fd = open(file_path, 'a')
     fd.write(string)
     fd.close()
+
+    # Print Jacobian
+    if ode_model:
+        np.set_printoptions(suppress=True, precision=4, linewidth=150)
+        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
+        jac = tf.zeros((2, 2))
+        for i in range(100):
+            with tf.GradientTape(persistent=True) as g:
+                x = (2 * tf.random.uniform((1, 2)) - 1)
+                g.watch(x)
+                y = model(0, x)
+            jac = jac + g.jacobian(y, x)[0, :, 0]
+        print(jac.numpy()/100)
+
+        with tf.GradientTape(persistent=True) as g:
+            x = tf.zeros([1, 2])
+            g.watch(x)
+            y = model(0, x)
+        print(g.jacobian(y, x)[0, :, 0])
+
 
 def zero_crossings(x):
     """Find indices of zeros crossings"""

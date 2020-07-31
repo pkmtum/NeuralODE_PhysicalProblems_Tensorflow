@@ -24,8 +24,6 @@ class modelFunc(tf.keras.Model):
         self.model = model
 
     def call(self, t, x):
-        if len(x.shape) == 1:
-            return self.model(tf.expand_dims(x, axis=0))[0]
         return self.model(x)
 
 
@@ -165,7 +163,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         x0 = tf.stack([[1.5, .5]])
         x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
     else: # is LSTM
-        x_t = np.zeros((1001, 2))
+        x_t = np.zeros_like(x_val[0])
         x_t[0] = x_val[0]
         for i in range(1, len(t)):
             x_t[1:i+1] = model(0., np.expand_dims(x_t, axis=0))[0, :i]
@@ -280,6 +278,25 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     fd = open(file_path, 'a')
     fd.write(string)
     fd.close()
+
+    # Print Jacobian
+    if ode_model:
+        np.set_printoptions(suppress=True, precision=4, linewidth=150)
+        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
+        jac = tf.zeros((2, 2))
+        for i in range(100):
+            with tf.GradientTape(persistent=True) as g:
+                x = (2 * tf.random.uniform((1, 2)) - 1)
+                g.watch(x)
+                y = model(0, x)
+            jac = jac + g.jacobian(y, x)[0, :, 0]
+        print(jac.numpy()/100)
+
+        with tf.GradientTape(persistent=True) as g:
+            x = tf.zeros([1, 2])
+            g.watch(x)
+            y = model(0, x)
+        print(g.jacobian(y, x)[0, :, 0])
 
     if args.create_video:
         x1 = np.sin(x_t[:, 0])
