@@ -1,5 +1,7 @@
 """
-Airplane system experiment, longitudinal and lateral motion, ODE-e2e where the model is a simple 8x8 matrix.
+Airplane system experiment, longitudinal and lateral motion,
+NODE-e2e where the model is a simple 8x8 matrix.
+Direct learning of the matrix entries
 """
 import argparse
 import datetime

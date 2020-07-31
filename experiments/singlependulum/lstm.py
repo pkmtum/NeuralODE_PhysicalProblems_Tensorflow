@@ -22,16 +22,13 @@ parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--batch_time', type=int, default=16)
-parser.add_argument('--viz', type=bool, default=True)
 parser.add_argument('--create_video', type=bool, default=False)
 args = parser.parse_args()
 
-MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 PLOT_DIR = 'plots/single_pendulum/lstm/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-if args.viz:
-    makedirs(PLOT_DIR)
+makedirs(PLOT_DIR)
 
 if not os.path.isfile('experiments/datasets/single_pendulum_x_train.npy'):
     x_train, _, x_val, _ = create_dataset()
@@ -66,9 +63,9 @@ class TrainDatagen(tf.keras.utils.Sequence):
 
 
 model = Sequential()
-model.add(LSTM(8, kernel_regularizer=l2(0.00001), return_sequences=True,
+model.add(LSTM(8, kernel_regularizer=l2(1e-5), return_sequences=True,
                input_shape=(None, x_train.shape[-1],)))
-model.add(Dense(y_train.shape[-1], activation=None, kernel_regularizer=l2(0.00001)))
+model.add(Dense(y_train.shape[-1], kernel_regularizer=l2(1e-5)))
 adam = Adam(lr=args.lr)
 
 model.compile(loss='mse', optimizer=adam, metrics=['mae', my_mse])
@@ -79,8 +76,8 @@ log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") \
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
-
 epoch_multi = 20
+
 def lr_scheduler(epoch):
     if epoch < 2*epoch_multi:
         return args.lr
@@ -93,16 +90,12 @@ def lr_scheduler(epoch):
 learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
 
 train_datagen = TrainDatagen()
-print(x_train.shape)
-print(x_val.shape)
 for epoch in range(10):
-    # print(model.summary())
     model.fit(train_datagen,
               epochs=epoch_multi*(epoch+1),
               validation_data=(x_val, y_val),
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
-    # model.save_weights('single_pendulum.h5')
-    if args.viz:
-        visualize(modelFunc(model), x_val_ref, PLOT_DIR, TIME_OF_RUN, args,
-                  ode_model=False, epoch=(epoch+1)*epoch_multi)
+    visualize(modelFunc(model), x_val_ref, PLOT_DIR, TIME_OF_RUN, args,
+                ode_model=False, epoch=(epoch+1)*epoch_multi)
+print(model.summary())

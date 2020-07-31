@@ -35,7 +35,7 @@ if args.adjoint:
 else:
     from tfdiffeq import odeint
 
-PLOT_DIR = 'plots/airplane/learnedode/'
+PLOT_DIR = 'plots/airplane_long/learnedode/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
@@ -43,7 +43,7 @@ t = tf.linspace(0., 100., args.data_size)
 if args.dtype == 'float64':
     t = tf.cast(t, tf.float64)
 
-if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
+if not os.path.isfile('experiments/datasets/airplane_long_x_train.npy'):
     x_train, _, x_val, _ = create_dataset()
 x_train, _, x_val, _ = load_dataset()
 x_train = x_train.astype(args.dtype)

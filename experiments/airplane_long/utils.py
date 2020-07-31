@@ -7,7 +7,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from tfdiffeq import odeint
-from Airplane import Airplane
+from AirplaneLong import AirplaneLong
 
 
 class Lambda(tf.keras.Model):
@@ -69,7 +69,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     """
     delta_t = 0.1
     x0 = (2 * tf.random.uniform((n_series, 4)) - 1)
-    airplane = Airplane(x0=x0)
+    airplane = AirplaneLong(x0=x0)
     with tf.device('/gpu:0'):
         x_train = airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series)
         y_train = np.array(airplane.call(0., x_train))
@@ -79,12 +79,12 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     x_val = []
     y_val = []
     # Extrapolation
-    airplane = Airplane(x0=tf.constant([1.5, 1., 2., .5]))
+    airplane = AirplaneLong(x0=tf.constant([1.5, 1., 2., .5]))
     with tf.device('/gpu:0'):
         x_val.append(airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
         y_val.append(np.array(airplane.call(0., x_val[-1])))
     # Interpolation
-    airplane = Airplane(x0=tf.constant([.5, .5, .5, .5]))
+    airplane = AirplaneLong(x0=tf.constant([.5, .5, .5, .5]))
     with tf.device('/gpu:0'):
         x_val.append(airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
         y_val.append(np.array(airplane.call(0., x_val[-1])))
@@ -92,18 +92,18 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     y_val = np.stack(y_val)
 
     if save_to_disk:
-        np.save('experiments/datasets/airplane_x_train.npy', x_train)
-        np.save('experiments/datasets/airplane_y_train.npy', y_train)
-        np.save('experiments/datasets/airplane_x_val.npy', x_val)
-        np.save('experiments/datasets/airplane_y_val.npy', y_val)
+        np.save('experiments/datasets/airplane_long_x_train.npy', x_train)
+        np.save('experiments/datasets/airplane_long_y_train.npy', y_train)
+        np.save('experiments/datasets/airplane_long_x_val.npy', x_val)
+        np.save('experiments/datasets/airplane_long_y_val.npy', y_val)
     return x_train, y_train, x_val, y_val
 
 
 def load_dataset():
-    x_train = np.load('experiments/datasets/airplane_x_train.npy').astype(np.float32)
-    y_train = np.load('experiments/datasets/airplane_y_train.npy').astype(np.float32)
-    x_val = np.load('experiments/datasets/airplane_x_val.npy').astype(np.float32)
-    y_val = np.load('experiments/datasets/airplane_y_val.npy').astype(np.float32)
+    x_train = np.load('experiments/datasets/airplane_long_x_train.npy').astype(np.float32)
+    y_train = np.load('experiments/datasets/airplane_long_y_train.npy').astype(np.float32)
+    x_val = np.load('experiments/datasets/airplane_long_x_val.npy').astype(np.float32)
+    y_val = np.load('experiments/datasets/airplane_long_y_val.npy').astype(np.float32)
     return x_train, y_train, x_val, y_val
 
 
@@ -114,8 +114,7 @@ def makedirs(dirname):
 
 def my_mse(y_true, y_pred):
     """Needed because Keras' MSE implementation includes L2 penalty """
-    squared_difference = tf.square(y_true - y_pred)
-    return tf.reduce_mean(squared_difference, axis=-1)
+    return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
 
 
 def relative_phase_error(x_pred, x_val):

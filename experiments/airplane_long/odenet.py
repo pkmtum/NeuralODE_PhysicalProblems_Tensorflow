@@ -31,7 +31,7 @@ else:
     from tfdiffeq import odeint
 
 MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
-PLOT_DIR = 'plots/airplane/odenet/'
+PLOT_DIR = 'plots/airplane_long/odenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 makedirs(PLOT_DIR)

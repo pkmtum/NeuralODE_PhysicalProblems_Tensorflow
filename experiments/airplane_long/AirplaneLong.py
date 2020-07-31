@@ -1,7 +1,7 @@
 from tfdiffeq import odeint
 import tensorflow as tf
 
-class Airplane(tf.keras.Model):
+class AirplaneLong(tf.keras.Model):
     """Class that provides a longitudinal motion model of a Boeing B777.
     State has the following structure: (V*, gamma, alpha, q).T
     """

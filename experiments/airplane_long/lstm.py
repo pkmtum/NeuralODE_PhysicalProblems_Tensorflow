@@ -1,5 +1,5 @@
 """
-Airplane experiment, LSTM.
+Airplane experiment longitudinal motion, LSTM.
 """
 import argparse
 import datetime
@@ -24,12 +24,12 @@ parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--batch_time', type=int, default=16)
 args = parser.parse_args()
 
-PLOT_DIR = 'plots/airplane/lstm/'
+PLOT_DIR = 'plots/airplane_long/lstm/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 makedirs(PLOT_DIR)
 
-if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
+if not os.path.isfile('experiments/datasets/airplane_long_x_train.npy'):
     x_train, _, x_val, _ = create_dataset()
 x_train, _, x_val, _ = load_dataset()
 # Offset input/output by one timestep
@@ -61,22 +61,21 @@ class TrainDatagen(tf.keras.utils.Sequence):
         return batch_x, batch_y
 
 model = Sequential()
-model.add(LSTM(32, kernel_regularizer=l2(0.00001), return_sequences=True,
+model.add(LSTM(32, kernel_regularizer=l2(1e-5), return_sequences=True,
                input_shape=(None, x_train.shape[-1],)))
-model.add(LSTM(32, kernel_regularizer=l2(0.00001), return_sequences=True))
-model.add(Dense(y_train.shape[-1], activation=None, kernel_regularizer=l2(0.00001)))
+model.add(Dense(y_train.shape[-1], kernel_regularizer=l2(1e-5)))
 adam = Adam(lr=args.lr)
 
 model.compile(loss='mse', optimizer=adam, metrics=['mae', my_mse])
 
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") \
-          + '|pendulum|lstm|' + str(args.dataset_size) + '|' + str(args.batch_time) \
+          + '|airl|lstm|' + str(args.dataset_size) + '|' + str(args.batch_time) \
           + '|' + str(args.batch_size)
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
-
 epoch_multi = 10
+
 def lr_scheduler(epoch):
     if epoch < 5*epoch_multi:
         return args.lr
@@ -89,16 +88,12 @@ def lr_scheduler(epoch):
 learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
 
 train_datagen = TrainDatagen()
-print(x_train.shape)
-print(x_val.shape)
 for epoch in range(10):
-    # print(model.summary())
     model.fit(train_datagen,
               epochs=epoch_multi*(epoch+1),
               validation_data=(x_val, y_val),
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
-    # model.save_weights('single_pendulum.h5')
-    if args.viz:
-        visualize(modelFunc(model), x_val_ref, PLOT_DIR, TIME_OF_RUN, args,
-                  ode_model=False, epoch=(epoch+1)*epoch_multi)
+    visualize(modelFunc(model), x_val_ref, PLOT_DIR, TIME_OF_RUN, args,
+                ode_model=False, epoch=(epoch+1)*epoch_multi)
+print(model.summary())

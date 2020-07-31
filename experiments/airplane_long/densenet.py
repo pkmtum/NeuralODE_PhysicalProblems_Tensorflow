@@ -24,12 +24,12 @@ parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--synthetic_derivative', type=bool, default=False, help='Create the derivatives from the time-series with numerical differentiation? default: False')
 args = parser.parse_args()
 
-PLOT_DIR = 'plots/airplane/densenet/'
+PLOT_DIR = 'plots/airplane_long/densenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 makedirs(PLOT_DIR)
 
-if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
+if not os.path.isfile('experiments/datasets/airplane_long_x_train.npy'):
     x_train, y_train, x_val, y_val = create_dataset(n_series=51)
 x_train, y_train, x_val, y_val = load_dataset()
 if args.synthetic_derivative:
