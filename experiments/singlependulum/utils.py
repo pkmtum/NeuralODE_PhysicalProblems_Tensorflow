@@ -101,6 +101,11 @@ def makedirs(dirname):
         os.makedirs(dirname)
 
 
+def my_mse(y_true, y_pred):
+    """Needed because Keras' MSE implementation includes L2 penalty """
+    return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
+
+
 def total_energy(state, l=1., g=9.81):
     """Calculates total energy of a pendulum system given a state."""
     return (1-np.cos(state[..., 0]))*l*g+state[..., 1]*state[..., 1]*0.5

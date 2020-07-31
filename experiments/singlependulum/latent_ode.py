@@ -1,5 +1,5 @@
 """
-Single Pendulum experiment, NODE-e2e.
+Single pendulum experiment, NODE-e2e.
 """
 import argparse
 import datetime
@@ -18,17 +18,18 @@ parser = argparse.ArgumentParser('ODE demo')
 parser.add_argument('--method', type=str, choices=['dopri5', 'adams', 'midpoint'], default='dopri5')
 parser.add_argument('--data_size', type=int, default=1001)
 parser.add_argument('--dataset_size', type=int, choices=[100], default=100)
-parser.add_argument('--lr', type=float, default=0.001)
+parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--batch_time', type=int, default=16)
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--niters', type=int, default=10000)
 parser.add_argument('--test_freq', type=int, default=500)
-parser.add_argument('--viz', action='store_true')
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--adjoint', type=eval, default=False)
+parser.add_argument('--dtype', type=str, choices=['float32', 'float64'], default='float32')
 parser.add_argument('--create_video', type=bool, default=False)
-parser.set_defaults(viz=True)
 args = parser.parse_args()
+
+tf.keras.backend.set_floatx(args.dtype)
 
 if args.adjoint:
     from tfdiffeq import odeint_adjoint as odeint
@@ -40,15 +41,18 @@ TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
 t = tf.linspace(0., 10., args.data_size)
+if args.dtype == 'float64':
+    t = tf.cast(t, tf.float64)
 
 if not os.path.isfile('experiments/datasets/single_pendulum_x_train.npy'):
     x_train, _, x_val, _ = create_dataset()
 x_train, _, x_val, _ = load_dataset()
+x_train = x_train.astype(args.dtype)
+x_val = x_val.astype(args.dtype)
 
 x_val = tf.convert_to_tensor(x_val.reshape(-1, 1, 2))
 
-if args.viz:
-    makedirs(PLOT_DIR)
+makedirs(PLOT_DIR)
 
 def get_batch():
     # pick random data series
@@ -75,15 +79,18 @@ class ODEFunc(tf.keras.Model):
         self.x1 = tf.keras.layers.Dense(8, activation='relu')
         self.x2 = tf.keras.layers.Dense(8, activation='relu')
         self.y = tf.keras.layers.Dense(2)
+        self.nfe = tf.Variable(0., trainable=False)
 
     @tf.function
     def call(self, t, y):
+        self.nfe.assign_add(1.)
         x = self.x1(y)
         x = self.x2(x)
         y = self.y(x)
         return y
 
 if __name__ == '__main__':
+
     end = time.time()
 
     time_meter = RunningAverageMeter(0.97)
@@ -100,15 +107,20 @@ if __name__ == '__main__':
                 ex_loss = tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1)
                 loss = tf.reduce_mean(ex_loss)
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
-                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 0.00001
+                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 1e-5
                 loss = loss + l2_loss
 
-            grads = tape.gradient(loss, func.variables)
+            nfe = func.nfe.numpy()
+            func.nfe.assign(0.)
+            grads = tape.gradient(loss, func.trainable_variables)
+            nbe = func.nfe.numpy()
+            func.nfe.assign(0.)
+            print('NFE: {}, NBE: {}'.format(nfe, nbe))
+
             grad_vars = zip(grads, func.variables)
             optimizer.apply_gradients(grad_vars)
             time_meter.update(time.time() - end)
             loss_meter.update(loss.numpy())
-            t0t = time.time()
             if itr % args.test_freq == 0:
                 pred_x = odeint(func, x_val[0], t)
                 loss = tf.reduce_mean(tf.abs(pred_x - x_val))

@@ -366,6 +366,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     if ode_model:
         np.set_printoptions(suppress=True, precision=4, linewidth=150)
         # Print Jacobian
+        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
         jac = tf.zeros((8, 8))
         for i in range(100):
             with tf.GradientTape(persistent=True) as g:

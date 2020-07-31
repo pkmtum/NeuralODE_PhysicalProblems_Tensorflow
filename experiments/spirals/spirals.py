@@ -1,5 +1,5 @@
 """
-Definition of ODENet and Augmented ODENet.
+"Toy example" with intertwining spirals.
 Ported from https://github.com/EmilienDupont/augmented-neural-odes/blob/master/anode/models.py
 """
 import argparse
@@ -10,7 +10,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
-from tfdiffeq import odeint_adjoint as odeint
+
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
     gpus[0],
@@ -23,6 +23,11 @@ parser.add_argument('--tol', type=float, default=1e-3)
 parser.add_argument('--adjoint', type=eval, default=False, choices=[True, False])
 parser.add_argument('--nepochs', type=int, default=160)
 args = parser.parse_args()
+
+if args.adjoint:
+    from tfdiffeq import odeint_adjoint as odeint
+else:
+    from tfdiffeq import odeint
 
 MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 
@@ -50,6 +55,20 @@ def create_spirals(N):
     res = np.append(res_a, res_b, axis=0)
     np.random.shuffle(res)
     return res[:, :2], res[:, 2]
+
+
+def plot_contour_map(model, epoch):
+    xp = np.linspace(-20, 20, 20)
+    yp = xp
+    xv, yv = np.meshgrid(xp, yp)
+    xv = np.reshape(xv, (-1))
+    yv = np.reshape(yv, (-1))
+    preds = model.predict(np.vstack([xv, yv]).T)
+    plt.contourf(xp, yp, np.reshape(preds, (xp.shape[0], yp.shape[0])))
+    plt.scatter((x[y.argsort()])[:N, 0], (x[y.argsort()])[:N, 1])
+    plt.scatter((x[y.argsort()])[N:, 0], (x[y.argsort()])[N:, 1])
+    plt.savefig('plots/spiral/' + args.network + '/pred{}.png'.format(epoch))
+    plt.close()
 
 
 class ODEFunc(tf.keras.Model):
@@ -184,7 +203,6 @@ elif args.network == 'densenet':
     model.add(Dense(12, input_shape=(2,)))
     model.add(Dense(12, activation='relu'))
     model.add(Dense(1, activation='sigmoid'))
-
     adam = Adam(lr=3e-2)
 
 model.compile(optimizer=adam, loss='binary_crossentropy', metrics=['accuracy'])
@@ -197,21 +215,12 @@ N = 1200
 x, y = create_spirals(N)
 x_train, x_val = x[:int(x.shape[0]*0.8)], x[int(x.shape[0]*0.8):]
 y_train, y_val = y[:int(x.shape[0]*0.8)], y[int(x.shape[0]*0.8):]
+
 for epoch in range(15):
     model.fit(x_train, y_train,
               epochs=1*(epoch+1),
               validation_data=(x_val, y_val),
               callbacks=[tensorboard_callback],
               initial_epoch=1*epoch)
-    xp = np.linspace(-20, 20, 20)
-    yp = xp
-    xv, yv = np.meshgrid(xp, yp)
-    xv = np.reshape(xv, (-1))
-    yv = np.reshape(yv, (-1))
-    preds = model.predict(np.vstack([xv, yv]).T)
-    plt.contourf(xp, yp, np.reshape(preds, (xp.shape[0], yp.shape[0])))
-    plt.scatter((x[y.argsort()])[:N, 0], (x[y.argsort()])[:N, 1])
-    plt.scatter((x[y.argsort()])[N:, 0], (x[y.argsort()])[N:, 1])
-    plt.savefig('plots/spiral/' + args.network + '/pred{}.png'.format(epoch))
-    plt.close()
+    plot_contour_map(model, epoch)
 print(model.summary())

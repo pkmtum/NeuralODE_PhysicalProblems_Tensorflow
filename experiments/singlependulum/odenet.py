@@ -1,5 +1,5 @@
 """
-Single Pendulum experiment.
+Single pendulum experiment, NODE-Net.
 """
 import argparse
 import datetime
@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, modelFunc, visualize
+from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
@@ -20,10 +20,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--adjoint', type=eval, default=True)
-parser.add_argument('--viz', action='store_true')
+parser.add_argument('--adjoint', type=eval, default=False)
+parser.add_argument('--synthetic_derivative', type=bool, default=False, help='Create the derivatives from the time-series with numerical differentiation? default: False')
 parser.add_argument('--create_video', type=bool, default=False)
-parser.set_defaults(viz=True)
 args = parser.parse_args()
 
 if args.adjoint:
@@ -35,8 +34,7 @@ MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 PLOT_DIR = 'plots/single_pendulum/odenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-if args.viz:
-    makedirs(PLOT_DIR)
+makedirs(PLOT_DIR)
 
 class ODEFunc(tf.keras.Model):
     def __init__(self, hidden_dim, augment_dim=0, time_dependent=True, **kwargs):
@@ -45,12 +43,11 @@ class ODEFunc(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.augment_dim = augment_dim
         self.time_dependent = time_dependent
-        self.dense1 = Dense(hidden_dim, activation='relu', kernel_regularizer=l2(0.00001))
+        self.dense1 = Dense(hidden_dim, activation='relu', kernel_regularizer=l2(1e-5))
         self.nfe = tf.Variable(0., trainable=False)
         self.nbe = tf.Variable(0., trainable=False)
         self.t_vec = tf.ones(dtype=tf.float32, shape=[16, 1])
 
-    # @tf.function
     def call(self, t, x):
         self.nfe.assign_add(1.)
         if self.time_dependent:
@@ -128,7 +125,7 @@ class ODEBlock(tf.keras.Model):
 
     @nbe.setter
     def nbe(self, value):
-        self.odefunc.nbe = value
+        self.odefunc.nbe.assign(value)
 
     @property
     def nfe(self):
@@ -136,7 +133,7 @@ class ODEBlock(tf.keras.Model):
 
     @nfe.setter
     def nfe(self, value):
-        self.odefunc.nfe = value
+        self.odefunc.nfe.assign(value)
 
     def compute_output_shape(self, input_shape):
         if self.odefunc.augment_dim > 0:
@@ -152,10 +149,10 @@ class ODENet(tf.keras.Model):
     def __init__(self, hidden_dim, output_dim):
         super(ODENet, self).__init__()
         self.output_dim = output_dim
-        self.dense1 = tf.keras.layers.Dense(hidden_dim, kernel_regularizer=l2(0.00001))
+        self.dense1 = tf.keras.layers.Dense(hidden_dim, 'relu', kernel_regularizer=l2(1e-5))
         odefunc = ODEFunc(hidden_dim+0, augment_dim=0)
         self.odeblock = ODEBlock(odefunc, solver='dopri5')
-        self.dense2 = Dense(output_dim, activation=None, kernel_regularizer=l2(0.00001))
+        self.dense2 = Dense(output_dim, activation=None, kernel_regularizer=l2(1e-5))
 
     def call(self, x):
         out = self.dense1(x)
@@ -169,6 +166,8 @@ class ODENet(tf.keras.Model):
 if not os.path.isfile('experiments/datasets/single_pendulum_x_train.npy'):
     x_train, y_train, x_val, y_val = create_dataset()
 x_train, y_train, x_val, y_val = load_dataset()
+if args.synthetic_derivative:
+    y_train = np.gradient(x_train)[1] / 0.01
 
 x_train = np.reshape(x_train, (-1, 2))
 y_train = np.reshape(y_train, (-1, 2))
@@ -183,11 +182,6 @@ y_train = y_train[c[::int(100/args.dataset_size)]]
 
 model = ODENet(hidden_dim=8, output_dim=y_train.shape[-1])
 
-def my_mse(y_true, y_pred):
-    # Needed because Keras' MSE includes the l2 penalty
-    squared_difference = tf.square(y_true - y_pred)
-    return tf.reduce_mean(squared_difference, axis=-1)
-
 adam = Adam(lr=args.lr)
 model.compile(optimizer=adam, loss='mse', metrics=['mae', my_mse])
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") \
@@ -195,7 +189,7 @@ log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") \
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
-epoch_multi = 5
+epoch_multi = 10
 
 def lr_scheduler(epoch):
     if epoch < 5*epoch_multi:
@@ -216,8 +210,5 @@ for epoch in range(10):
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
     print('Interpolation:', model.evaluate(x_val, y_val, verbose=0))
-    # print(model.summary())
-    # model.save_weights('single_pendulum.h5')
-    if args.viz:
-        visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
-                  ode_model=True, epoch=(epoch+1)*epoch_multi)
+    visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
+              ode_model=True, epoch=(epoch+1)*epoch_multi)

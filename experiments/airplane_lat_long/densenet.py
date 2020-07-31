@@ -1,5 +1,5 @@
 """
-Airplane system experiment, longitudinal and lateral motion, DenseNet.
+Airplane system experiment, longitudinal and lateral motion, Dense-Net.
 """
 import argparse
 import datetime
@@ -10,7 +10,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, my_mse, modelFunc, visualize
+from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
@@ -21,22 +21,20 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--viz', action='store_true')
-parser.set_defaults(viz=True)
+parser.add_argument('--synthetic_derivative', type=bool, default=False, help='Create the derivatives from the time-series with numerical differentiation? default: False')
 args = parser.parse_args()
 
-
-MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 PLOT_DIR = 'plots/airplane_lat_long/densenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-if args.viz:
-    makedirs(PLOT_DIR)
+makedirs(PLOT_DIR)
 
 if not os.path.isfile('experiments/datasets/airplane_lat_long_x_train.npy'):
     x_train, y_train, x_val, y_val = create_dataset(n_series=51)
 x_train, y_train, x_val, y_val = load_dataset()
-print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
+if args.synthetic_derivative:
+    y_train = np.gradient(x_train)[1] / 0.01
+
 data_dim = x_train.shape[-1]
 x_train = np.reshape(x_train, (-1, data_dim))
 y_train = np.reshape(y_train, (-1, data_dim))
@@ -52,17 +50,17 @@ np.random.shuffle(c)
 x_train = x_train[c[::int(100/args.dataset_size)]]
 y_train = y_train[c[::int(100/args.dataset_size)]]
 
-l2_penalty = 1e-6
 model = Sequential()
-model.add(Dense(64, 'sigmoid', kernel_regularizer=l2(l2_penalty),
+model.add(Dense(64, 'sigmoid', kernel_regularizer=l2(1e-6),
                 input_shape=(data_dim,)))
-model.add(Dense(64, 'sigmoid', kernel_regularizer=l2(l2_penalty)))
+model.add(Dense(64, 'sigmoid', kernel_regularizer=l2(1e-6)))
 model.add(Dense(data_dim))
 
 adam = Adam(lr=args.lr)
 model.compile(optimizer=adam, loss='mse', metrics=['mae', my_mse])
+
 log_dir = ("logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-           + '|msp|densenet|' + str(args.dataset_size))
+           + '|airll|densenet|' + str(args.dataset_size))
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
@@ -87,8 +85,8 @@ for epoch in range(10):
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
 
-    print('extrap:', model.evaluate(x_val_extrap, y_val_extrap))
-    print('interp:', model.evaluate(x_val_interp, y_val_interp))
-    if args.viz:
-        visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
-                  ode_model=True, epoch=(epoch+1)*epoch_multi)
+    print('Extrapolation:', model.evaluate(x_val_extrap, y_val_extrap, verbose=0))
+    print('Interpolation:', model.evaluate(x_val_interp, y_val_interp, verbose=0))
+    visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
+                ode_model=True, epoch=(epoch+1)*epoch_multi)
+print(model.summary())

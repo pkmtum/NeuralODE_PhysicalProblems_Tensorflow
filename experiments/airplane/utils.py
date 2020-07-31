@@ -71,7 +71,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     x0 = (2 * tf.random.uniform((n_series, 4)) - 1)
     airplane = Airplane(x0=x0)
     with tf.device('/gpu:0'):
-        x_train = airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series))
+        x_train = airplane.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series)
         y_train = np.array(airplane.call(0., x_train))
     x_train = np.transpose(x_train, [1, 0, 2])
     y_train = np.transpose(y_train, [1, 0, 2])

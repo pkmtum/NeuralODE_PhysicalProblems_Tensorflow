@@ -11,6 +11,7 @@ from tensorflow.keras.layers import Dense, LSTM
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
+
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
     gpus[0],
@@ -21,15 +22,12 @@ parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--batch_time', type=int, default=16)
-parser.add_argument('--viz', type=bool, default=True)
 args = parser.parse_args()
 
-MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 PLOT_DIR = 'plots/airplane/lstm/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-if args.viz:
-    makedirs(PLOT_DIR)
+makedirs(PLOT_DIR)
 
 if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
     x_train, _, x_val, _ = create_dataset()

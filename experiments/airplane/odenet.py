@@ -1,5 +1,5 @@
 """
-Airplane system experiment, DenseNet and NODE-Net.
+Airplane system longitudinal motion experiment, NODE-Net.
 """
 import argparse
 import datetime
@@ -10,7 +10,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, my_mse, modelFunc, visualize
+from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
@@ -22,7 +22,7 @@ parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--adjoint', type=bool, default=False)
-parser.add_argument('--viz', type=bool, default=True)
+parser.add_argument('--synthetic_derivative', type=bool, default=False, help='Create the derivatives from the time-series with numerical differentiation? default: False')
 args = parser.parse_args()
 
 if args.adjoint:
@@ -34,8 +34,7 @@ MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 PLOT_DIR = 'plots/airplane/odenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
-if args.viz:
-    makedirs(PLOT_DIR)
+makedirs(PLOT_DIR)
 
 class ODEFunc(tf.keras.Model):
     def __init__(self, hidden_dim, augment_dim=0, time_dependent=True, **kwargs):
@@ -44,12 +43,11 @@ class ODEFunc(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.augment_dim = augment_dim
         self.time_dependent = time_dependent
-        self.dense1 = Dense(hidden_dim, activation='relu', kernel_regularizer=l2(0.00001))
+        self.dense1 = Dense(hidden_dim, activation='relu', kernel_regularizer=l2(1e-5))
         self.nfe = tf.Variable(0., trainable=False)
         self.nbe = tf.Variable(0., trainable=False)
         self.t_vec = tf.ones(dtype=tf.float32, shape=[32, 1])
 
-    # @tf.function
     def call(self, t, x):
         self.nfe.assign_add(1.)
         if self.time_dependent:
@@ -125,7 +123,7 @@ class ODEBlock(tf.keras.Model):
 
     @nbe.setter
     def nbe(self, value):
-        self.odefunc.nbe = value
+        self.odefunc.nbe.assign(value)
 
     @property
     def nfe(self):
@@ -133,7 +131,7 @@ class ODEBlock(tf.keras.Model):
 
     @nfe.setter
     def nfe(self, value):
-        self.odefunc.nfe = value
+        self.odefunc.nfe.assign(value)
 
     def compute_output_shape(self, input_shape):
         if self.odefunc.augment_dim > 0:
@@ -149,10 +147,10 @@ class ODENet(tf.keras.Model):
     def __init__(self, hidden_dim, output_dim):
         super(ODENet, self).__init__()
         self.output_dim = output_dim
-        self.dense1 = Dense(hidden_dim, 'relu', kernel_regularizer=l2(0.00001))
+        self.dense1 = Dense(hidden_dim, 'relu', kernel_regularizer=l2(1e-5))
         odefunc = ODEFunc(hidden_dim+0, augment_dim=0)
         self.odeblock = ODEBlock(odefunc, solver='dopri5')
-        self.dense2 = Dense(output_dim, kernel_regularizer=l2(0.00001))
+        self.dense2 = Dense(output_dim, kernel_regularizer=l2(1e-5))
 
     def call(self, x):
         out = self.dense1(x)
@@ -166,8 +164,9 @@ class ODENet(tf.keras.Model):
 if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
     x_train, y_train, x_val, y_val = create_dataset(n_series=51)
 x_train, y_train, x_val, y_val = load_dataset()
+if args.synthetic_derivative:
+    y_train = np.gradient(x_train)[1] / 0.1
 
-print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
 data_dim = x_train.shape[-1]
 x_train = np.reshape(x_train, (-1, data_dim))
 y_train = np.reshape(y_train, (-1, data_dim))
@@ -188,7 +187,7 @@ model = ODENet(hidden_dim=32, output_dim=data_dim)
 adam = Adam(lr=args.lr)
 model.compile(optimizer=adam, loss='mse', metrics=['mae', my_mse])
 log_dir = ("logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-           + '|msp|odenet|' + str(args.dataset_size))
+           + '|airl|odenet|' + str(args.dataset_size))
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
@@ -213,15 +212,7 @@ for epoch in range(10):
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
 
-    print('extrap:', model.evaluate(x_val_extrap, y_val_extrap))
-    print('interp:', model.evaluate(x_val_interp, y_val_interp))
-    if args.viz:
-        visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
-                  ode_model=True, epoch=(epoch+1)*epoch_multi)
-
-    with tf.GradientTape(persistent=True) as g:
-        x = tf.zeros(shape=(1, 4))
-        g.watch(x)
-        y = model(x)
-    jac = g.jacobian(y, x)[0, :, 0]
-    print(jac)
+    print('Extrapolation:', model.evaluate(x_val_extrap, y_val_extrap, verbose=0))
+    print('Interpolation:', model.evaluate(x_val_interp, y_val_interp, verbose=0))
+    visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
+              ode_model=True, epoch=(epoch+1)*epoch_multi)

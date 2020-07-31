@@ -23,11 +23,9 @@ parser.add_argument('--batch_time', type=int, default=16)
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--niters', type=int, default=10000)
 parser.add_argument('--test_freq', type=int, default=500)
-parser.add_argument('--viz', action='store_true')
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--adjoint', type=eval, default=False)
 parser.add_argument('--dtype', type=str, choices=['float32', 'float64'], default='float32')
-parser.set_defaults(viz=True)
 args = parser.parse_args()
 
 tf.keras.backend.set_floatx(args.dtype)
@@ -54,9 +52,7 @@ x_val = x_val.astype(args.dtype)
 x_val_extrap = tf.convert_to_tensor(x_val[0].reshape(-1, 1, x_train.shape[-1]))
 x_val_interp = tf.convert_to_tensor(x_val[1].reshape(-1, 1, x_train.shape[-1]))
 
-if args.viz:
-    makedirs(PLOT_DIR)
-
+makedirs(PLOT_DIR)
 
 def get_batch():
     # pick random data series
@@ -119,12 +115,14 @@ if __name__ == '__main__':
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
                 l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 1e-6
                 loss = loss + l2_loss
+
             nfe = func.nfe.numpy()
             func.nfe.assign(0.)
             grads = tape.gradient(loss, func.trainable_variables)
             nbe = func.nfe.numpy()
             func.nfe.assign(0.)
             print('NFE: {}, NBE: {}'.format(nfe, nbe))
+
             grad_vars = zip(grads, func.trainable_variables)
             optimizer.apply_gradients(grad_vars)
             time_meter.update(time.time() - end)
