@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-x_train = np.load('experiments/datasets/airplane_x_train.npy')
+x_train = np.load('experiments/datasets/airplane_long_x_train.npy')
 x_train = np.reshape(x_train, (-1, 4))
 #
 # c = np.arange(len(x_train))
@@ -12,7 +12,7 @@ plt.close()
 plt.scatter(x_train[:, 2], x_train[:, 3], alpha=0.1, s=3)
 plt.savefig('train_short_period.png')
 plt.close()
-x_val = np.load('experiments/datasets/airplane_x_val.npy')
+x_val = np.load('experiments/datasets/airplane_long_x_val.npy')
 x_val = np.reshape(x_val, (-1, 4))
 
 plt.scatter(x_val[:, 0], x_val[:, 1], s=3)

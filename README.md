@@ -10,3 +10,5 @@ python3 experiments/single_pendulum/densenet.py
 ## Requirements
 * TensorFlow 2.2
 * tfdiffeq
+* matplotlib
+* (keras-mdn-layer) if you want to try mixture-density-layers on top of an lstm
