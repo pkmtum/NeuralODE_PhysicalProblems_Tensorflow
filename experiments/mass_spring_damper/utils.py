@@ -6,7 +6,6 @@ import os
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
-import mdn
 from tfdiffeq import odeint
 from MassSpringDamper import MassSpringDamper
 
@@ -182,6 +181,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         # varying series lengths and the future timesteps don't affect the predictions
         # before it anyways.
         if is_mdn:
+            import mdn
             for i in range(1, len(t)):
                 pred_extrap = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
                 x_t_extrap[i:i+1] = mdn.sample_from_output(pred_extrap.numpy()[0], 2, 5, temp=1.)
