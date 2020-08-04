@@ -12,6 +12,7 @@ class AirplaneLong(tf.keras.Model):
         # Arguments:
             x0: tf.Tensor, shape=(4,), state at x_0
         """
+        super(AirplaneLong, self).__init__()
         self.x = x0
         self.A = tf.constant([[-0.01, -0.49, -0.046, -0.001],
                               [0.11, 0.0003, 1.14, 0.043],

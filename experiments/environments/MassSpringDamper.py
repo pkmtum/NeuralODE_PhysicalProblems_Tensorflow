@@ -15,7 +15,7 @@ class MassSpringDamper(tf.keras.Model):
             c: Float, spring coefficient
             x: tf.Tensor, shape=(2,), state at x_0
         """
-
+        super(MassSpringDamper, self).__init__()
         self.x = x0
         self.A = tf.constant([[0., 1.],
                               [-c/m, -d/m]])

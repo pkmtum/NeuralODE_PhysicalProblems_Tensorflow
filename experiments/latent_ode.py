@@ -3,6 +3,7 @@ Airplane system experiment, longitudinal and lateral motion, NODE-e2e.
 """
 import argparse
 import datetime
+import json
 import os
 import time
 import numpy as np
@@ -15,6 +16,7 @@ tf.config.experimental.set_virtual_device_configuration(
     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=256)])
 
 parser = argparse.ArgumentParser('ODE demo')
+parser.add_argument('--system', type=str, default='mass_spring_damper')
 parser.add_argument('--method', type=str, choices=['dopri5', 'midpoint'], default='dopri5')
 parser.add_argument('--data_size', type=int, default=1001)
 parser.add_argument('--dataset_size', type=int, choices=[100], default=100)
@@ -28,6 +30,11 @@ parser.add_argument('--adjoint', type=eval, default=False)
 parser.add_argument('--dtype', type=str, choices=['float32', 'float64'], default='float32')
 args = parser.parse_args()
 
+with open('experiments/environments.json') as json_file:
+    environment_configs = json.load(json_file)
+
+config = environment_configs[args.system]
+
 tf.keras.backend.set_floatx(args.dtype)
 
 if args.adjoint:
@@ -35,22 +42,19 @@ if args.adjoint:
 else:
     from tfdiffeq import odeint
 
-PLOT_DIR = 'plots/airplane_lat_long/learnedode/'
+PLOT_DIR = 'plots/' + config['name'] + '/learnedode/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
-t = tf.linspace(0., 100., args.data_size)
+t = tf.range(args.data_size) * config['delta_t']
 if args.dtype == 'float64':
     t = tf.cast(t, tf.float64)
 
-if not os.path.isfile('experiments/datasets/airplane_lat_long_x_train.npy'):
-    x_train, _, x_val, _ = create_dataset()
-x_train, _, x_val, _ = load_dataset()
+if not os.path.isfile('experiments/datasets/' + config['name'] + '_x_train.npy'):
+    x_train, _, x_val, _ = create_dataset(n_series=51, config=config)
+x_train, _, x_val, _ = load_dataset(config)
 x_train = x_train.astype(args.dtype)
 x_val = x_val.astype(args.dtype)
-
-x_val_extrap = tf.convert_to_tensor(x_val[0].reshape(-1, 1, x_train.shape[-1]))
-x_val_interp = tf.convert_to_tensor(x_val[1].reshape(-1, 1, x_train.shape[-1]))
 
 makedirs(PLOT_DIR)
 
@@ -130,17 +134,9 @@ if __name__ == '__main__':
             time_meter.update(time.time() - end)
             loss_meter.update(loss.numpy())
             if itr % args.test_freq == 0:
-                pred_x_extrap = odeint(func, x_val_extrap[0], t)
-                pred_x_interp = odeint(func, x_val_interp[0], t)
-                loss_extrap = tf.reduce_mean(tf.abs(pred_x_extrap-x_val_extrap)).numpy()
-                loss_interp = tf.reduce_mean(tf.abs(pred_x_interp-x_val_interp)).numpy()
-                print('Iter {:04d} | Traj. Loss ex.: {:.6f} | '
-                      'Traj. Loss in.: {:.6f} | Seconds/batch {:,.4f}'.format(itr,
-                                                                              loss_extrap,
-                                                                              loss_interp,
-                                                                              time_meter.avg))
+                print('Iter {:04d} | Seconds/batch {:,.4f}'.format(itr, time_meter.avg))
                 visualize(func, np.array(x_val), PLOT_DIR, TIME_OF_RUN, args,
-                          ode_model=True, epoch=itr)
+                          config, ode_model=True, epoch=itr)
             if itr == int(args.niters*0.5):  # learning rate decay
                 optimizer.lr = optimizer.lr * 0.1
             elif itr == int(args.niters*0.7):

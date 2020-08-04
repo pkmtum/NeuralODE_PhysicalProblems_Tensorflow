@@ -3,6 +3,7 @@ Airplane experiment lateral and longitudinal motion, LSTM.
 """
 import argparse
 import datetime
+import json
 import os
 import numpy as np
 import tensorflow as tf
@@ -18,20 +19,26 @@ tf.config.experimental.set_virtual_device_configuration(
     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=256)])
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--system', type=str, default='mass_spring_damper')
 parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--batch_time', type=int, default=16)
 args = parser.parse_args()
 
-PLOT_DIR = 'plots/airplane_lat_long/lstm/'
+with open('experiments/environments.json') as json_file:
+    environment_configs = json.load(json_file)
+
+config = environment_configs[args.system]
+
+PLOT_DIR = 'plots/' + config['name'] + '/lstm/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 makedirs(PLOT_DIR)
 
-if not os.path.isfile('experiments/datasets/airplane_lat_long_x_train.npy'):
-    x_train, _, x_val, _ = create_dataset()
-x_train, _, x_val, _ = load_dataset()
+if not os.path.isfile('experiments/datasets/' + config['name'] + '_x_train.npy'):
+    x_train, _, x_val, _ = create_dataset(n_series=51, config=config)
+x_train, _, x_val, _ = load_dataset(config)
 # Offset input/output by one timestep
 x_val_ref = x_val
 y_train = x_train[:, 1:]
@@ -63,15 +70,15 @@ class TrainDatagen(tf.keras.utils.Sequence):
 
 
 model = Sequential()
-model.add(LSTM(32, kernel_regularizer=l2(1e-5), return_sequences=True,
-               input_shape=(None, x_train.shape[-1],)))
-model.add(Dense(y_train.shape[-1], kernel_regularizer=l2(1e-5)))
+model.add(LSTM(config['hidden_dim'], kernel_regularizer=l2(1e-5), return_sequences=True,
+               input_shape=(None, config['dof'],)))
+model.add(Dense(config['dof'], kernel_regularizer=l2(1e-5)))
 adam = Adam(lr=args.lr)
 
 model.compile(loss='mse', optimizer=adam, metrics=['mae', my_mse])
 
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") \
-          + '_airll_lstm_' + str(args.dataset_size) + '_' + str(args.batch_time) \
+          + '_' + config['name'] + '_lstm_' + str(args.dataset_size) + '_' + str(args.batch_time) \
           + '_' + str(args.batch_size)
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
@@ -99,5 +106,5 @@ for epoch in range(10):
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
     visualize(modelFunc(model), x_val_ref, PLOT_DIR, TIME_OF_RUN, args,
-              ode_model=False, epoch=(epoch+1)*epoch_multi)
+              config, ode_model=False, epoch=(epoch+1)*epoch_multi)
 print(model.summary())

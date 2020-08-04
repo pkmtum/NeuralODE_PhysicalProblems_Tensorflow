@@ -38,7 +38,7 @@ with open('experiments/environments.json') as json_file:
 config = environment_configs[args.system]
 
 MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
-PLOT_DIR = 'plots2/' + config['name'] + '/odenet/'
+PLOT_DIR = 'plots/' + config['name'] + '/odenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 makedirs(PLOT_DIR)

@@ -15,6 +15,7 @@ class SinglePendulum(tf.keras.Model):
             theta_dt: Float, starting angular velocity of pendulum
             g: Float, gravity
         """
+        super(SinglePendulum, self).__init__()
         self.l = l
         self.x = x0
         self.g = g

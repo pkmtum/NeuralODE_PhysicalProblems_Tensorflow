@@ -106,19 +106,38 @@ def my_mse(y_true, y_pred):
     return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
 
 
+def trajectory_error(x_pred, x_val):
+    return np.mean(np.abs(x_pred - x_val))
+
+
 def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False):
     if config['name'] == 'airplane_lat_long':
-        return visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
+        return visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
     elif config['name'] == 'airplane_long':
-        return visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
+        return visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
     elif config['name'] == 'mass_spring_damper':
-        return visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
+        return visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
     elif config['name'] == 'single_pendulum':
-        return visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
+        return visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
 
 
-def trajectory_error(x_pred, x_val):
-    return np.mean(np.abs(x_pred[..., :4] - x_val[..., :4]))
+def relative_phase_error(x_pred, x_val, check=True):
+    """Computes the relative phase error of x_pred w.r.t. x_true.
+    This is done by finding the locations of the zero crossings in both signals,
+    then corresponding crossings are compared to each other.
+    # Arguments:
+        x_pred: numpy.ndarray shape=(n_datapoints) - predicted time series
+        x_true: numpy.ndarray shape=(n_datapoints) - reference time series
+        check: bool - set phase error to nan if the crossings are too different
+    """
+    ref_crossings = zero_crossings(x_val)
+    pred_crossings = zero_crossings(x_pred)
+    t_ref = np.mean(np.diff(ref_crossings)) * 2
+    t_pred = np.mean(np.diff(pred_crossings)) * 2
+    phase_error = t_ref/t_pred - 1
+    if check and len(pred_crossings) < len(ref_crossings) - 2:
+        phase_error = np.nan
+    return phase_error
 
 
 def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False):
@@ -133,45 +152,6 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
                    or the value of the next step (False)
         args: input arguments from main script
     """
-
-    def relative_phase_error(x_pred, x_val):
-        """Computes the relative phase error of x_pred w.r.t. x_true.
-        This is done by finding the locations of the zero crossings in both signals,
-        then corresponding crossings are compared to each other.
-        # Arguments:
-            x_pred: numpy.ndarray shape=(n_datapoints, 8) - predicted time series
-            x_true: numpy.ndarray shape=(n_datapoints, 8) - reference time series
-        """
-        # long period
-        ref_crossings = zero_crossings(x_val[:, 0])
-        pred_crossings = zero_crossings(x_pred[:, 0])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error_lp = t_ref/t_pred - 1
-        if len(pred_crossings) < len(ref_crossings) - 2:
-            phase_error_lp = np.nan
-        # short period
-        ref_crossings = zero_crossings(x_val[:, 2])
-        pred_crossings = zero_crossings(x_pred[:, 2])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error_sp = t_ref/t_pred - 1
-        if len(pred_crossings) < len(ref_crossings) - 2:
-            phase_error_sp = np.nan
-        # laterals
-        ref_crossings = zero_crossings(x_val[:, 5])
-        pred_crossings = zero_crossings(x_pred[:, 5])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error_lat_r = t_ref/t_pred - 1
-
-        ref_crossings = zero_crossings(x_val[:, 7])
-        pred_crossings = zero_crossings(x_pred[:, 7])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error_lat_p = t_ref/t_pred - 1
-        return phase_error_lp, phase_error_sp, phase_error_lat_r, phase_error_lat_p
-
     x_val = x_val.reshape(2, -1, config['dof'])
     dt = config['delta_t']
     t = tf.range(0., 1001) * dt
@@ -320,15 +300,22 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
     ax_3d_lat.view_init(elev=1., azim=90.)
 
     fig.tight_layout()
-    plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
+    plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
+    print(PLOT_DIR + '{:03d}'.format(epoch), epoch)
     plt.close()
 
     # Compute metrics and save them to csv.
-    pe_extrap_lp_long, pe_extrap_sp_long, pe_extrap_lat_r, pe_extrap_lat_p = relative_phase_error(x_t[0], x_val[0])
-    traj_error_extrap = trajectory_error(x_t[0], x_val[0])
+    pe_extrap_lp_long = relative_phase_error(x_t[0, :, 0], x_val[0, :, 0])
+    pe_extrap_sp_long = relative_phase_error(x_t[0, :, 2], x_val[0, :, 2])
+    pe_extrap_lat_r = relative_phase_error(x_t[0, :, 5], x_val[0, :, 5], check=False)
+    pe_extrap_lat_p = relative_phase_error(x_t[0, :, 7], x_val[0, :, 7], check=False)
+    traj_error_extrap = trajectory_error(x_t[0, :, :4], x_val[0, :, :4])
 
-    pe_interp_lp_long, pe_interp_sp_long, pe_interp_lat_r, pe_interp_lat_p = relative_phase_error(x_t[1], x_val[1])
-    traj_error_interp = trajectory_error(x_t[1], x_val[1])
+    pe_interp_lp_long = relative_phase_error(x_t[1, :, 0], x_val[1, :, 0])
+    pe_interp_sp_long = relative_phase_error(x_t[1, :, 2], x_val[1, :, 2])
+    pe_interp_lat_r = relative_phase_error(x_t[1, :, 5], x_val[1, :, 5], check=False)
+    pe_interp_lat_p = relative_phase_error(x_t[1, :, 7], x_val[1, :, 7], check=False)
+    traj_error_interp = trajectory_error(x_t[1, :, :4], x_val[1, :, :4])
 
 
     wall_time = (datetime.datetime.now()
@@ -531,7 +518,7 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
     ax_3d.view_init(elev=40., azim=60.)
 
     fig.tight_layout()
-    plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
+    plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
     plt.close()
 
     # Compute Metrics
@@ -614,6 +601,20 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
             phase_error = np.nan
         return phase_error
 
+    def total_energy(state, k=1, m=1):
+        """Calculates total energy of a mass-spring-damper system given a state."""
+        return 0.5*k*state[..., 0]*state[..., 0]+0.5*m*state[..., 1]*state[..., 1]
+
+    def relative_energy_drift(x_pred, x_true, t=-1):
+        """Computes the relative energy drift of x_pred w.r.t. x_true
+        # Arguments:
+            x_pred: numpy.ndarray shape=(n_datapoints, 2) - predicted time series
+            x_true: numpy.ndarray shape=(n_datapoints, 2) - reference time series
+            t: int, index at which to compute the energy drift, (default: -1)
+        """
+        energy_pred = total_energy(x_pred[t])
+        energy_true = total_energy(x_true[t])
+        return (energy_pred-energy_true) / energy_true
 
     x_val = x_val.reshape(2, -1, 2)
     dt = 0.01
@@ -733,7 +734,7 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
     ax_energy.plot(np.arange(1001)/100.1, np.array([total_energy(x_) for x_ in x_t_interp]))
 
     fig.tight_layout()
-    plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
+    plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
     plt.close()
 
     # Compute Metrics
@@ -785,7 +786,7 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
         print(g.jacobian(y, x)[0, :, 0])
 
 
-def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, latent=False, epoch=0):
+def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, latent=False, epoch=0, is_mdn=False):
     """Visualize a tf.keras.Model for a single pendulum.
     # Arguments:
         model: a Keras model
@@ -813,6 +814,20 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
             phase_error = np.nan
         return phase_error
 
+    def total_energy(state, l=1., g=9.81):
+        """Calculates total energy of a pendulum system given a state."""
+        return (1-np.cos(state[..., 0]))*l*g+state[..., 1]*state[..., 1]*0.5
+
+    def relative_energy_drift(x_pred, x_true, t=-1):
+        """Computes the relative energy drift of x_pred w.r.t. x_true
+        # Arguments:
+            x_pred: numpy.ndarray shape=(n_datapoints, 2) - predicted time series
+            x_true: numpy.ndarray shape=(n_datapoints, 2) - reference time series
+            t: int, index at which to compute the energy drift, (default: -1)
+        """
+        energy_pred = total_energy(x_pred[t])
+        energy_true = total_energy(x_true[t])
+        return (energy_pred-energy_true) / energy_true
 
     x_val = x_val.reshape(-1, 2)
     dt = 0.01
@@ -911,7 +926,7 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     ax_energy.plot(np.arange(0., x_t.shape[0]*dt, dt), total_energy(x_t))
 
     fig.tight_layout()
-    plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
+    plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
     plt.close()
 
     # Compute Metrics
@@ -957,56 +972,56 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
             y = model(0, x)
         print(g.jacobian(y, x)[0, :, 0])
 
-    if args.create_video:
-        x1 = np.sin(x_t[:, 0])
-        y1 = -np.cos(x_t[:, 0])
+    # if args.create_video:
+    #     x1 = np.sin(x_t[:, 0])
+    #     y1 = -np.cos(x_t[:, 0])
 
-        fig = plt.figure()
-        ax = fig.add_subplot(111, autoscale_on=False, xlim=(-2, 2), ylim=(-2, 2))
-        ax.set_aspect('equal')
-        ax.grid()
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111, autoscale_on=False, xlim=(-2, 2), ylim=(-2, 2))
+    #     ax.set_aspect('equal')
+    #     ax.grid()
 
-        line, = ax.plot([], [], 'o-', lw=2)
-        time_template = 'time = %.1fs'
-        time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
+    #     line, = ax.plot([], [], 'o-', lw=2)
+    #     time_template = 'time = %.1fs'
+    #     time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
 
-        def animate(i):
-            thisx = [0, x1[i]]
-            thisy = [0, y1[i]]
+    #     def animate(i):
+    #         thisx = [0, x1[i]]
+    #         thisy = [0, y1[i]]
 
-            line.set_data(thisx, thisy)
-            time_text.set_text(time_template % (i*0.01))
-            return line, time_text
-        def init():
-            line.set_data([], [])
-            time_text.set_text('')
-            return line, time_text
+    #         line.set_data(thisx, thisy)
+    #         time_text.set_text(time_template % (i*0.01))
+    #         return line, time_text
+    #     def init():
+    #         line.set_data([], [])
+    #         time_text.set_text('')
+    #         return line, time_text
 
 
-        ani = animation.FuncAnimation(fig, animate, range(1, len(x1)),
-                                      interval=dt*len(x1), blit=True, init_func=init)
-        Writer = animation.writers['ffmpeg']
-        writer = Writer(fps=60, metadata=dict(artist='Me'), bitrate=2400)
-        ani.save(PLOT_DIR + 'sp{}.mp4'.format(epoch), writer=writer)
+    #     ani = animation.FuncAnimation(fig, animate, range(1, len(x1)),
+    #                                   interval=dt*len(x1), blit=True, init_func=init)
+    #     Writer = animation.writers['ffmpeg']
+    #     writer = Writer(fps=60, metadata=dict(artist='Me'), bitrate=2400)
+    #     ani.save(PLOT_DIR + 'sp{}.mp4'.format(epoch), writer=writer)
 
-        x1 = np.sin(x_val[:, 0])
-        y1 = -np.cos(x_val[:, 0])
+    #     x1 = np.sin(x_val[:, 0])
+    #     y1 = -np.cos(x_val[:, 0])
 
-        fig = plt.figure()
-        ax = fig.add_subplot(111, autoscale_on=False, xlim=(-2, 2), ylim=(-2, 2))
-        ax.set_aspect('equal')
-        ax.grid()
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111, autoscale_on=False, xlim=(-2, 2), ylim=(-2, 2))
+    #     ax.set_aspect('equal')
+    #     ax.grid()
 
-        line, = ax.plot([], [], 'o-', lw=2)
-        time_template = 'time = %.1fs'
-        time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
+    #     line, = ax.plot([], [], 'o-', lw=2)
+    #     time_template = 'time = %.1fs'
+    #     time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
 
-        ani = animation.FuncAnimation(fig, animate, range(1, len(x_t)),
-                                      interval=dt*len(x_t), blit=True, init_func=init)
-        Writer = animation.writers['ffmpeg']
-        writer = Writer(fps=60, metadata=dict(artist='Me'), bitrate=2400)
-        ani.save(PLOT_DIR + 'sp_ref.mp4', writer=writer)
-        plt.close()
+    #     ani = animation.FuncAnimation(fig, animate, range(1, len(x_t)),
+    #                                   interval=dt*len(x_t), blit=True, init_func=init)
+    #     Writer = animation.writers['ffmpeg']
+    #     writer = Writer(fps=60, metadata=dict(artist='Me'), bitrate=2400)
+    #     ani.save(PLOT_DIR + 'sp_ref.mp4', writer=writer)
+    #     plt.close()
 
 
 def zero_crossings(x):

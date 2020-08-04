@@ -52,9 +52,9 @@ x_train = x_train[c[::int(100/args.dataset_size)]]
 y_train = y_train[c[::int(100/args.dataset_size)]]
 
 model = Sequential()
-model.add(Dense(64, 'sigmoid', kernel_regularizer=l2(1e-6),
+model.add(Dense(config['hidden_dim'], 'sigmoid', kernel_regularizer=l2(1e-6),
                 input_shape=(config['dof'],)))
-model.add(Dense(64, 'sigmoid', kernel_regularizer=l2(1e-6)))
+model.add(Dense(config['hidden_dim'], 'sigmoid', kernel_regularizer=l2(1e-6)))
 model.add(Dense(config['dof']))
 
 adam = Adam(lr=args.lr)

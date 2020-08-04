@@ -3,7 +3,7 @@
         "name": "airplane_lat_long",
         "ref_model": "AirplaneLatLong",
         "dof": 8,
-        "hidden_dim": 3,
+        "hidden_dim": 64,
         "delta_t": 0.1,
         "validation": {
             "extrapolation": [1.5, 1.5, 1.0, 0.5, 1.5, 1.0, 1.5, 1.5],
