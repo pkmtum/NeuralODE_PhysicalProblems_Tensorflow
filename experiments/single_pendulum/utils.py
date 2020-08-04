@@ -64,7 +64,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     theta0_in = np.random.random((n_series//2))
     theta0_out = np.random.random((n_series-n_series//2)) + np.pi - 1
     theta0 = np.concatenate([theta0_in, theta0_out])
-    pendulum = SinglePendulum(theta=theta0, theta_dt=tf.zeros_like(theta0)) # compute all trajectories at once
+    pendulum = SinglePendulum(theta=theta0, theta_dt=tf.zeros_like(theta0))  # compute all trajectories at once
     with tf.device('/gpu:0'):
         x_train = pendulum.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series)
         y_train = np.array(pendulum.call(0., x_train))
@@ -162,7 +162,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     if ode_model:
         x0 = tf.stack([[1.5, .5]])
         x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-    else: # is LSTM
+    else:  # is LSTM
         x_t = np.zeros_like(x_val[0])
         x_t[0] = x_val[0]
         for i in range(1, len(t)):
@@ -206,9 +206,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 2)
 
-    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
+    if ode_model:  # is Dense-Net or NODE-Net or NODE-e2e
         dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
-    else: # is LSTM
+    else:  # is LSTM
         # Compute artificial x_dot by numerically diffentiating:
         # x_dot \approx (x_{t+1}-x_t)/dt
         yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]

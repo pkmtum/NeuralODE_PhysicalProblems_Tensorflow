@@ -102,7 +102,7 @@ if __name__ == '__main__':
         for itr in range(1, args.niters + 1):
             with tf.GradientTape() as tape:
                 batch_x0, batch_t, batch_x = get_batch()
-                pred_x = odeint(func, batch_x0, batch_t, method=args.method) # (T, B, D)
+                pred_x = odeint(func, batch_x0, batch_t, method=args.method)  # (T, B, D)
                 ex_loss = tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1)
                 loss = tf.reduce_mean(ex_loss)
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
@@ -126,7 +126,7 @@ if __name__ == '__main__':
                                                                               time_meter.avg))
                 visualize(func, np.array(x_val), PLOT_DIR, TIME_OF_RUN, args,
                           ode_model=True, epoch=itr)
-            if itr == int(args.niters*0.5): # aligns with the other datasets
+            if itr == int(args.niters*0.5):  # aligns with the other datasets
                 optimizer.lr = optimizer.lr * 0.1
             if itr == int(args.niters*0.7):
                 optimizer.lr = optimizer.lr * 0.1

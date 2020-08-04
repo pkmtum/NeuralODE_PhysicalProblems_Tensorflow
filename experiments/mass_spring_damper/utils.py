@@ -66,7 +66,7 @@ def create_dataset(n_series=51, samples_per_series=1001, save_to_disk=True):
     x0_in = np.random.random((n_series//2))
     x0_out = np.random.random((n_series-n_series//2)) + np.pi - 1
     x0 = np.concatenate([x0_in, x0_out])
-    msd = MassSpringDamper(x=x0, x_dt=tf.zeros_like(x0)) # compute all trajectories at once
+    msd = MassSpringDamper(x=x0, x_dt=tf.zeros_like(x0))  # compute all trajectories at once
     with tf.device('/gpu:0'):
         x_train = msd.step(dt=(samples_per_series-1)*delta_t, n_steps=samples_per_series)
         y_train = np.array(msd.call(0., x_train))
@@ -172,7 +172,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
         x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
         x0_interp = tf.stack([x_val[1, 0]])
         x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-    else: # LSTM model
+    else:  # LSTM model
         x_t_extrap = np.zeros_like(x_val[0])
         x_t_extrap[0] = x_val[0, 0]
         x_t_interp = np.zeros_like(x_val[1])
@@ -234,18 +234,18 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, latent=
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 2)
 
-    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
+    if ode_model:  # is Dense-Net or NODE-Net or NODE-e2e
         dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
-    else: # is LSTM
+    else:  # is LSTM
         # Compute artificial x_dot by numerically diffentiating:
         # x_dot \approx (x_{t+1}-x_t)/dt
         yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
-        if is_mdn: # have to sample from output Gaussians
+        if is_mdn:  # have to sample from output Gaussians
             yt_1 = np.apply_along_axis(mdn.sample_from_output, 1, yt_1.numpy(), 2, 5, temp=.1)[:,0]
         dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
 
     dydt_abs = dydt.reshape(steps, steps, 2)
-    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True) # make unit vector
+    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)  # make unit vector
 
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)

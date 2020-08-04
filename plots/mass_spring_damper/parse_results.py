@@ -7,7 +7,7 @@ def pretty_print_latex(matrix):
     """Prints matrix in a format that can be pasted into Latex"""
     row = ""
     for loss in matrix[[2, 3, 4, 5, 6, 7]]:
-        if loss < 1e-2: # use scientific notation
+        if loss < 1e-2:  # use scientific notation
             row += (" {0:.1e}          &".format(float(loss))).replace('-0', '-')
         else:
             row += " {0:.3f}           &".format(float(loss))

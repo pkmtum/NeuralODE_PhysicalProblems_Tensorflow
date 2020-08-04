@@ -21,7 +21,8 @@ parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--adjoint', type=bool, default=False)
-parser.add_argument('--synthetic_derivative', type=bool, default=False, help='Create the derivatives from the time-series with numerical differentiation? default: False')
+parser.add_argument('--synthetic_derivative', type=bool, default=False,
+                    help='Numerical derivatives? (default: False)')
 args = parser.parse_args()
 
 if args.adjoint:

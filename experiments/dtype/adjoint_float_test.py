@@ -1,6 +1,6 @@
 """Comparision of the adjoint method with regular backpropagation.
-Uses the simple test equation: 
-$ f(T) = \int_{0}^{T}x dt$ 
+Uses the simple test equation:
+$ f(T) = \int_{0}^{T}x dt$
 subject to $ \dot{x} = bx $
 $ x(0) = a $
 Also compares tf.float32 to tf.float64.
@@ -45,7 +45,7 @@ for dtype in dtypes:
         tf.keras.backend.set_floatx('float32')
     else:
         tf.keras.backend.set_floatx('float64')
-    x_0 = tf.constant(1., dtype=dtype) # not important for Gradient
+    x_0 = tf.constant(1., dtype=dtype)  # not important for Gradient
     a = tf.constant(2., dtype=dtype)
     b = tf.constant(2., dtype=dtype)
     T = tf.constant(2., dtype=dtype)
@@ -54,7 +54,7 @@ for dtype in dtypes:
     odemodel = ODE(a, b, dtype)
     for rtol in np.logspace(-13, 0, 14)[::-1]:
         print('rtol:', rtol)
-        # Run forward and backward passes, while tracking the time 
+        # Run forward and backward passes, while tracking the time
         with tf.device('/gpu:0'):
             t0 = time.time()
             with tf.GradientTape() as g:

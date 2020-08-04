@@ -57,8 +57,8 @@ class TrainDatagen(tf.keras.utils.Sequence):
                       dtype=np.int64), args.batch_size,
             replace=True)
 
-        batch_x = np.stack([x_train[n, s+i] for i in range(args.batch_time)], axis=1) # (T, M, D)
-        batch_y = np.stack([y_train[n, s+i] for i in range(args.batch_time)], axis=1) # (T, M, D)
+        batch_x = np.stack([x_train[n, s+i] for i in range(args.batch_time)], axis=1)  # (T, M, D)
+        batch_y = np.stack([y_train[n, s+i] for i in range(args.batch_time)], axis=1)  # (T, M, D)
         return batch_x, batch_y
 
 

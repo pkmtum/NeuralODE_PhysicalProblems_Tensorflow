@@ -21,7 +21,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--synthetic_derivative', type=bool, default=False, help='Create the derivatives from the time-series with numerical differentiation? default: False')
 args = parser.parse_args()
 
 PLOT_DIR = 'plots/mass_spring_damper/densenet/'

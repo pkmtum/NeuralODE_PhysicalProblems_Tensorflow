@@ -169,7 +169,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
         x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()
         x_t_extrap = x_t[:, 0]
         x_t_interp = x_t[:, 1]
-    else: # LSTM model
+    else:  # LSTM model
         x_t_extrap = np.zeros_like(x_val[0])
         x_t_extrap[0] = x_val[0, 0]
         x_t_interp = np.zeros_like(x_val[1])
@@ -226,9 +226,9 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, ode_model=True, epoch=0
     mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
     dydt_ref = dydt_ref.reshape(steps, steps, 4)
 
-    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
+    if ode_model:  # is Dense-Net or NODE-Net or NODE-e2e
         dydt = model(0., input_grid.reshape(steps * steps, 4)).numpy()
-    else: # is LSTM
+    else:  # is LSTM
         # Compute artificial x_dot by numerically diffentiating:
         # x_dot \approx (x_{t+1}-x_t)/d
         yt_1 = model(0., input_grid.reshape(steps * steps, 1, 4))[:, 0]
