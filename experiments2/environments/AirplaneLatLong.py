@@ -36,7 +36,7 @@ class AirplaneLatLong(tf.keras.Model):
             dx: tf.Tensor, shape=(8,) - time derivatives of the system
         """
 
-        dx = tf.matmul(self.A, tf.expand_dims(x, -1))[..., 0]
+        dx = tf.matmul(tf.cast(self.A, x.dtype), tf.expand_dims(x, -1))[..., 0]
         return dx
 
     def step(self, dt=0.01, n_steps=10, *args, **kwargs):

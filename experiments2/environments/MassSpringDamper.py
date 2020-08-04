@@ -2,21 +2,23 @@ from tfdiffeq import odeint
 import tensorflow as tf
 
 
-class AirplaneLong(tf.keras.Model):
-    """Class that provides a longitudinal motion model of a Boeing B777.
-    State has the following structure: (V*, gamma, alpha, q).T
+class MassSpringDamper(tf.keras.Model):
+    """Class that provides a customizable version of a mass-spring-damper system.
+       All parameters are customizable.
     """
 
-    def __init__(self, x0=0.):
+    def __init__(self, m=1., c=1., d=0., x0=0.,):
         """
         # Arguments:
-            x0: tf.Tensor, shape=(4,), state at x_0
+            m: Float, mass
+            d: Float, damper coefficient (default: 0.)
+            c: Float, spring coefficient
+            x: tf.Tensor, shape=(2,), state at x_0
         """
+
         self.x = x0
-        self.A = tf.constant([[-0.01, -0.49, -0.046, -0.001],
-                              [0.11, 0.0003, 1.14, 0.043],
-                              [-0.11, -0.0003, -1.14, 0.957],
-                              [0.1, 0.0, -15.34, -3.00]])
+        self.A = tf.constant([[0., 1.],
+                              [-c/m, -d/m]])
 
     @tf.function
     def call(self, t, x):
@@ -25,13 +27,13 @@ class AirplaneLong(tf.keras.Model):
 
         # Arguments
             t: Float - current time, irrelevant
-            x: tf.Tensor, shape=(4,) - states of system
+            x: tf.Tensor, shape=(2,) - content: [x, x_dt]
 
         # Returns:
-            dx: tf.Tensor, shape=(4,) - time derivatives of the system
+            dx: tf.Tensor, shape=(2,) - time derivatives of the system
         """
 
-        dx = tf.matmul(self.A, tf.expand_dims(x, -1))[..., 0]
+        dx = tf.matmul(tf.cast(self.A, x.dtype), tf.expand_dims(x, -1))[..., 0]
         return dx
 
     def step(self, dt=0.01, n_steps=10, *args, **kwargs):
@@ -47,6 +49,7 @@ class AirplaneLong(tf.keras.Model):
         # Returns:
             x: tf.Tensor, shape=(4,) - new state of the system
         """
+
         t = tf.linspace(0., dt, n_steps)
         self.x = odeint(self.call, self.x, t, *args, **kwargs)
         return self.x
