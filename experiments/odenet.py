@@ -1,14 +1,14 @@
 """
-Airplane system longitudinal motion experiment, NODE-Net.
+Experiments with NODE-Net.
 """
 import argparse
 import datetime
+import json
 import os
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense
-from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
 from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
 
@@ -18,11 +18,13 @@ tf.config.experimental.set_virtual_device_configuration(
     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=512)])
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--system', type=str, default='mass_spring_damper')
 parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--dataset_size', type=int, default=10)
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--adjoint', type=bool, default=False)
-parser.add_argument('--synthetic_derivative', type=bool, default=False, help='Create the derivatives from the time-series with numerical differentiation? default: False')
+parser.add_argument('--synthetic_derivative', type=bool, default=False,
+                    help='Use numerical derivatives? (default: False)')
 args = parser.parse_args()
 
 if args.adjoint:
@@ -30,11 +32,17 @@ if args.adjoint:
 else:
     from tfdiffeq import odeint
 
+with open('experiments/environments.json') as json_file:
+    environment_configs = json.load(json_file)
+
+config = environment_configs[args.system]
+
 MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
-PLOT_DIR = 'plots/airplane_long/odenet/'
+PLOT_DIR = 'plots2/' + config['name'] + '/odenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 makedirs(PLOT_DIR)
+
 
 class ODEFunc(tf.keras.Model):
     def __init__(self, hidden_dim, augment_dim=0, time_dependent=True, **kwargs):
@@ -55,13 +63,14 @@ class ODEFunc(tf.keras.Model):
             if x.shape[0] != self.t_vec.shape[0]:
                 self.t_vec = tf.ones(dtype=tf.float32, shape=[x.shape[0], 1])
             t_vec = tf.multiply(self.t_vec, t)
-            # Shape (batch_size, data_dim + 1)
+            # Shape (batch_size, config['dof'] + 1)
             t_and_x = tf.concat([t_vec, x], axis=-1)
             # Shape (batch_size, hidden_dim)
             out = self.dense1(t_and_x)
         else:
             out = self.dense1(x)
         return out
+
 
 class ODEBlock(tf.keras.Model):
 
@@ -91,7 +100,7 @@ class ODEBlock(tf.keras.Model):
         """
         Solves ODE starting from x.
         # Arguments:
-            x: Tensor. Shape (batch_size, self.odefunc.data_dim)
+            x: Tensor. Shape (batch_size, self.odefunc.config['dof'])
         # Returns:
             Output tensor of forward pass.
         """
@@ -106,7 +115,7 @@ class ODEBlock(tf.keras.Model):
         if self.odefunc.augment_dim > 0:
             # Add augmentation
             aug = tf.zeros([x.shape[0], self.odefunc.augment_dim], dtype=x.dtype)
-            # Shape (batch_size, data_dim + augment_dim)
+            # Shape (batch_size, config['dof'] + augment_dim)
             x_aug = tf.concat([x, aug], axis=-1)
         else:
             x_aug = x
@@ -142,6 +151,7 @@ class ODEBlock(tf.keras.Model):
             output_shape = input_shape
         return output_shape
 
+
 class ODENet(tf.keras.Model):
 
     def __init__(self, hidden_dim, output_dim):
@@ -161,37 +171,32 @@ class ODENet(tf.keras.Model):
     def compute_output_shape(self, input_shape):
         return tf.TensorShape([input_shape[0], self.output_dim])
 
-if not os.path.isfile('experiments/datasets/airplane_x_train.npy'):
-    x_train, y_train, x_val, y_val = create_dataset(n_series=51)
-x_train, y_train, x_val, y_val = load_dataset()
+
+if not os.path.isfile('experiments/datasets/' + config['name'] + '_x_train.npy'):
+    x_train, y_train, x_val, y_val = create_dataset(n_series=51, config=config)
+x_train, y_train, x_val, y_val = load_dataset(config)
 if args.synthetic_derivative:
-    y_train = np.gradient(x_train)[1] / 0.1
-
-data_dim = x_train.shape[-1]
-x_train = np.reshape(x_train, (-1, data_dim))
-y_train = np.reshape(y_train, (-1, data_dim))
-
-x_val_extrap, y_val_extrap = x_val[0], y_val[0]
-x_val_interp, y_val_interp = x_val[1], y_val[1]
-
-x_val = np.reshape(x_val, (-1, data_dim))
-y_val = np.reshape(y_val, (-1, data_dim))
+    y_train = np.gradient(x_train)[1] / config['delta_t']
+x_train = np.reshape(x_train, (-1, config['dof']))
+y_train = np.reshape(y_train, (-1, config['dof']))
 
 c = np.arange(len(x_train))
 np.random.shuffle(c)
 x_train = x_train[c[::int(100/args.dataset_size)]]
 y_train = y_train[c[::int(100/args.dataset_size)]]
 
-model = ODENet(hidden_dim=32, output_dim=data_dim)
+model = ODENet(hidden_dim=config['hidden_dim'], output_dim=config['dof'])
 
 adam = Adam(lr=args.lr)
 model.compile(optimizer=adam, loss='mse', metrics=['mae', my_mse])
+
 log_dir = ("logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-           + '_airl_odenet_' + str(args.dataset_size))
+           + '_' + config['name'] + '_odenet_' + str(args.dataset_size))
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
 epoch_multi = 5
+
 
 def lr_scheduler(epoch):
     if epoch < 5*epoch_multi:
@@ -202,17 +207,20 @@ def lr_scheduler(epoch):
         return args.lr * 0.01
     return args.lr * 0.001
 
-learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
 
+learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
 for epoch in range(10):
     model.fit(x_train, y_train,
               epochs=epoch_multi*(epoch+1),
               batch_size=args.batch_size,
-              validation_data=(x_val, y_val),
+              validation_data=(x_val.reshape(-1, config['dof']),
+                               y_val.reshape(-1, config['dof'])),
               callbacks=[tensorboard_callback, learning_rate_callback],
               initial_epoch=epoch_multi*epoch)
 
-    print('Extrapolation:', model.evaluate(x_val_extrap, y_val_extrap, verbose=0))
-    print('Interpolation:', model.evaluate(x_val_interp, y_val_interp, verbose=0))
-    visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args,
+    for i, trajectory in enumerate(config['validation']):
+        print(trajectory, model.evaluate(x_val[i], y_val[i], verbose=0))
+
+    visualize(modelFunc(model), x_val, PLOT_DIR, TIME_OF_RUN, args, config,
               ode_model=True, epoch=(epoch+1)*epoch_multi)
+print(model.summary())

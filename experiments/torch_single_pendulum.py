@@ -1,9 +1,7 @@
 """
 Single Pendulum experiment.
 """
-import datetime
-from SinglePendulum import SinglePendulum
-import matplotlib.animation as animation
+from environments.SinglePendulum import SinglePendulum
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -42,7 +40,7 @@ def visualize_single_pendulum_model(model, epoch=0):
     model_func = modelFunc(model)
     x_t = odeint(model_func, x0, torch.linspace(0., 10., int(10./dt)).to(x0)).cpu().detach().numpy()
 
-    ref_pendulum = SinglePendulum(theta=1.01, theta_dt=5.)
+    ref_pendulum = SinglePendulum(x0=tf.constant([1.01, 5.])
     x_t_ref = np.array(ref_pendulum.step(dt=999*0.01, n_steps=1000))
     plt.close()
     plt.scatter(x_t_ref[:, 0], x_t_ref[:, 1], c=np.linspace(0., 255., x_t.shape[0]), cmap='magma')

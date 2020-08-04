@@ -107,10 +107,18 @@ def my_mse(y_true, y_pred):
 
 
 def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False):
-    if args.system == 'airplane_lat_long':
+    if config['name'] == 'airplane_lat_long':
         return visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
-    elif args.system == 'airplane_long':
+    elif config['name'] == 'airplane_long':
         return visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
+    elif config['name'] == 'mass_spring_damper':
+        return visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
+    elif config['name'] == 'single_pendulum':
+        return visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False)
+
+
+def trajectory_error(x_pred, x_val):
+    return np.mean(np.abs(x_pred[..., :4] - x_val[..., :4]))
 
 
 def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False):
@@ -125,8 +133,6 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
                    or the value of the next step (False)
         args: input arguments from main script
     """
-    def trajectory_error(x_pred, x_val):
-        return np.mean(np.abs(x_pred[..., :4] - x_val[..., :4]))
 
     def relative_phase_error(x_pred, x_val):
         """Computes the relative phase error of x_pred w.r.t. x_true.
@@ -385,6 +391,32 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
                    or the value of the next step (False)
         args: input arguments from main script
     """
+    def relative_phase_error(x_pred, x_val):
+        """Computes the relative phase error of x_pred w.r.t. x_true.
+        This is done by finding the locations of the zero crossings in both signals,
+        then corresponding crossings are compared to each other.
+        # Arguments:
+            x_pred: numpy.ndarray shape=(n_datapoints, 4) - predicted time series
+            x_true: numpy.ndarray shape=(n_datapoints, 4) - reference time series
+        """
+        # long period
+        ref_crossings = zero_crossings(x_val[:, 0])
+        pred_crossings = zero_crossings(x_pred[:, 0])
+        t_ref = np.mean(np.diff(ref_crossings)) * 2
+        t_pred = np.mean(np.diff(pred_crossings)) * 2
+        phase_error_lp = t_ref/t_pred - 1
+        if len(pred_crossings) < len(ref_crossings) - 2:
+            phase_error_lp = np.nan
+        # short period
+        ref_crossings = zero_crossings(x_val[:, 2])
+        pred_crossings = zero_crossings(x_pred[:, 2])
+        t_ref = np.mean(np.diff(ref_crossings)) * 2
+        t_pred = np.mean(np.diff(pred_crossings)) * 2
+        phase_error_sp = t_ref/t_pred - 1
+        if len(pred_crossings) < len(ref_crossings) - 2:
+            phase_error_sp = np.nan
+        return phase_error_lp, phase_error_sp
+
     x_val = x_val.reshape(2, -1, 4)
     dt = 0.1
     t = tf.linspace(0., 100., int(100./dt)+1)
@@ -551,6 +583,430 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
             g.watch(x)
             y = model(0, x)
         print(g.jacobian(y, x)[0, :, 0])
+
+
+def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, latent=False, epoch=0, is_mdn=False):
+    """Visualize a tf.keras.Model for a single pendulum.
+    # Arguments:
+        model: A Keras model, that accepts t and x when called
+        x_val: np.ndarray, shape=(1, samples_per_series, 2) or (samples_per_series, 2)
+                The reference time series, against which the model will be compared
+        PLOT_DIR: Directory to plot in
+        TIME_OF_RUN: Time at which the run began
+        ode_model: whether the model outputs the derivative of the current step (True),
+                   or the value of the next step (False)
+        args: input arguments from main script
+    """
+    def relative_phase_error(x_pred, x_val):
+        """Computes the relative phase error of x_pred w.r.t. x_true.
+        This is done by finding the locations of the zero crossings in both signals,
+        then corresponding crossings are compared to each other.
+        # Arguments:
+            x_pred: numpy.ndarray shape=(n_datapoints, 2) - predicted time series
+            x_true: numpy.ndarray shape=(n_datapoints, 2) - reference time series
+        """
+        ref_crossings = zero_crossings(x_val[:, 0])
+        pred_crossings = zero_crossings(x_pred[:, 0])
+        t_ref = np.mean(np.diff(ref_crossings)) * 2
+        t_pred = np.mean(np.diff(pred_crossings)) * 2
+        phase_error = t_ref/t_pred - 1
+        if len(pred_crossings) < len(ref_crossings) - 2:
+            phase_error = np.nan
+        return phase_error
+
+
+    x_val = x_val.reshape(2, -1, 2)
+    dt = 0.01
+    t = tf.linspace(0., 10., int(10./dt)+1)
+    # Compute the predicted trajectories
+    if ode_model:
+        x0_extrap = tf.stack([x_val[0, 0]])
+        x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
+        x0_interp = tf.stack([x_val[1, 0]])
+        x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
+    else: # LSTM model
+        x_t_extrap = np.zeros_like(x_val[0])
+        x_t_extrap[0] = x_val[0, 0]
+        x_t_interp = np.zeros_like(x_val[1])
+        x_t_interp[0] = x_val[1, 0]
+        # Always injects the entire time series because keras is slow when using
+        # varying series lengths and the future timesteps don't affect the predictions
+        # before it anyways.
+        if is_mdn:
+            import mdn
+            for i in range(1, len(t)):
+                pred_extrap = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
+                x_t_extrap[i:i+1] = mdn.sample_from_output(pred_extrap.numpy()[0], 2, 5, temp=1.)
+                pred_interp = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
+                x_t_interp[i:i+1] = mdn.sample_from_output(pred_interp.numpy()[0], 2, 5, temp=1.)
+        else:
+            for i in range(1, len(t)):
+                x_t_extrap[i:i+1] = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
+                x_t_interp[i:i+1] = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
+
+    x_t = np.stack([x_t_extrap, x_t_interp], axis=0)
+    # Plot the generated trajectories
+    fig = plt.figure(figsize=(12, 8), facecolor='white')
+    ax_traj = fig.add_subplot(231, frameon=False)
+    ax_phase = fig.add_subplot(232, frameon=False)
+    ax_vecfield = fig.add_subplot(233, frameon=False)
+    ax_vec_error_abs = fig.add_subplot(234, frameon=False)
+    ax_vec_error_rel = fig.add_subplot(235, frameon=False)
+    ax_energy = fig.add_subplot(236, frameon=False)
+    ax_traj.cla()
+    ax_traj.set_title('Trajectories')
+    ax_traj.set_xlabel('t')
+    ax_traj.set_ylabel('x,y')
+    ax_traj.plot(t.numpy(), x_val[0, :, 0], t.numpy(), x_val[0, :, 1], 'g-')
+    ax_traj.plot(t.numpy(), x_t[0, :, 0], '--', t.numpy(), x_t[0, :, 1], 'b--')
+    ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
+    ax_traj.set_ylim(-6, 6)
+    ax_traj.legend()
+
+    ax_phase.cla()
+    ax_phase.set_title('Phase Portrait')
+    ax_phase.set_xlabel('x')
+    ax_phase.set_ylabel('x_dt')
+    ax_phase.plot(x_val[0, :, 0], x_val[0, :, 1], 'g--')
+    ax_phase.plot(x_t[0, :, 0], x_t[0, :, 1], 'b--')
+    ax_phase.plot(x_val[1, :, 0], x_val[1, :, 1], 'g--')
+    ax_phase.plot(x_t[1, :, 0], x_t[1, :, 1], 'b--')
+    ax_phase.set_xlim(-6, 6)
+    ax_phase.set_ylim(-6, 6)
+
+    ax_vecfield.cla()
+    ax_vecfield.set_title('Learned Vector Field')
+    ax_vecfield.set_xlabel('x')
+    ax_vecfield.set_ylabel('x_dt')
+
+    steps = 61
+    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
+    ref_func = environments.MassSpringDamper.MassSpringDamper()
+    dydt_ref = ref_func(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
+    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
+    dydt_ref = dydt_ref.reshape(steps, steps, 2)
+
+    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
+        dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
+    else: # is LSTM
+        # Compute artificial x_dot by numerically diffentiating:
+        # x_dot \approx (x_{t+1}-x_t)/dt
+        yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
+        if is_mdn: # have to sample from output Gaussians
+            yt_1 = np.apply_along_axis(mdn.sample_from_output, 1, yt_1.numpy(), 2, 5, temp=.1)[:,0]
+        dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
+
+    dydt_abs = dydt.reshape(steps, steps, 2)
+    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True) # make unit vector
+
+    ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
+    ax_vecfield.set_xlim(-6, 6)
+    ax_vecfield.set_ylim(-6, 6)
+
+    ax_vec_error_abs.cla()
+    ax_vec_error_abs.set_title('Abs. error of xdot')
+    ax_vec_error_abs.set_xlabel('x')
+    ax_vec_error_abs.set_ylabel('x_dt')
+
+    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
+    c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
+    plt.colorbar(c1, ax=ax_vec_error_abs)
+
+    ax_vec_error_abs.set_xlim(-6, 6)
+    ax_vec_error_abs.set_ylim(-6, 6)
+
+    ax_vec_error_rel.cla()
+    ax_vec_error_rel.set_title('Rel. error of xdot')
+    ax_vec_error_rel.set_xlabel('x')
+    ax_vec_error_rel.set_ylabel('x_dt')
+
+    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
+    c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
+    plt.colorbar(c2, ax=ax_vec_error_rel)
+
+    ax_vec_error_rel.set_xlim(-6, 6)
+    ax_vec_error_rel.set_ylim(-6, 6)
+
+    ax_energy.cla()
+    ax_energy.set_title('Total Energy')
+    ax_energy.set_xlabel('t')
+    ax_energy.plot(np.arange(1001)/100.1, np.array([total_energy(x_) for x_ in x_t_interp]))
+
+    fig.tight_layout()
+    plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
+    plt.close()
+
+    # Compute Metrics
+    energy_drift_extrap = relative_energy_drift(x_t[0], x_val[0])
+    phase_error_extrap = relative_phase_error(x_t[0], x_val[0])
+    traj_error_extrap = trajectory_error(x_t[0], x_val[0])
+
+    energy_drift_interp = relative_energy_drift(x_t[1], x_val[1])
+    phase_error_interp = relative_phase_error(x_t[1], x_val[1])
+    traj_error_interp = trajectory_error(x_t[1], x_val[1])
+
+
+    wall_time = (datetime.datetime.now()
+                 - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
+    string = "{},{},{},{},{},{},{},{}\n".format(wall_time, epoch,
+                                                energy_drift_interp, energy_drift_extrap,
+                                                phase_error_interp, phase_error_extrap,
+                                                traj_error_interp, traj_error_extrap)
+    file_path = (PLOT_DIR + TIME_OF_RUN + "results"
+                 + str(args.lr) + str(args.dataset_size) + str(args.batch_size)
+                 + ".csv")
+    if not os.path.isfile(file_path):
+        title_string = ("wall_time,epoch,energy_drift_interp,energy_drift_extrap, phase_error_interp,"
+                        + "phase_error_extrap, traj_err_interp, traj_err_extrap\n")
+        fd = open(file_path, 'a')
+        fd.write(title_string)
+        fd.close()
+    fd = open(file_path, 'a')
+    fd.write(string)
+    fd.close()
+
+    # Print Jacobian
+    if ode_model:
+        np.set_printoptions(suppress=True, precision=4, linewidth=150)
+        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
+        jac = tf.zeros((2, 2))
+        for i in range(100):
+            with tf.GradientTape(persistent=True) as g:
+                x = (2 * tf.random.uniform((1, 2)) - 1)
+                g.watch(x)
+                y = model(0, x)
+            jac = jac + g.jacobian(y, x)[0, :, 0]
+        print(jac.numpy()/100)
+
+        with tf.GradientTape(persistent=True) as g:
+            x = tf.zeros([1, 2])
+            g.watch(x)
+            y = model(0, x)
+        print(g.jacobian(y, x)[0, :, 0])
+
+
+def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, latent=False, epoch=0):
+    """Visualize a tf.keras.Model for a single pendulum.
+    # Arguments:
+        model: a Keras model
+        x_val: np.ndarray, shape=(1, samples_per_series, 2) or (samples_per_series, 2)
+                The reference time series, against which the model will be compared
+        PLOT_DIR: dir to plot in
+        TIME_OF_RUN: time of the run
+        ode_model: whether the model outputs the derivative of the current step
+        args: input arguments from main script
+    """
+    def relative_phase_error(x_pred, x_val):
+        """Computes the relative phase error of x_pred w.r.t. x_true.
+        This is done by finding the locations of the zero crossings in both signals,
+        then corresponding crossings are compared to each other.
+        # Arguments:
+            x_pred: numpy.ndarray shape=(n_datapoints, 2) - predicted time series
+            x_true: numpy.ndarray shape=(n_datapoints, 2) - reference time series
+        """
+        ref_crossings = zero_crossings(x_val[:, 0])
+        pred_crossings = zero_crossings(x_pred[:, 0])
+        t_ref = np.mean(np.diff(ref_crossings)) * 2
+        t_pred = np.mean(np.diff(pred_crossings)) * 2
+        phase_error = t_ref/t_pred - 1
+        if len(pred_crossings) < len(ref_crossings) - 2:
+            phase_error = np.nan
+        return phase_error
+
+
+    x_val = x_val.reshape(-1, 2)
+    dt = 0.01
+    t = tf.linspace(0., 10., int(10./dt)+1)
+    # Compute the predicted trajectories
+    if ode_model:
+        x0 = tf.stack([[1.5, .5]])
+        x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
+    else: # is LSTM
+        x_t = np.zeros_like(x_val[0])
+        x_t[0] = x_val[0]
+        for i in range(1, len(t)):
+            x_t[1:i+1] = model(0., np.expand_dims(x_t, axis=0))[0, :i]
+
+    fig = plt.figure(figsize=(12, 8), facecolor='white')
+    ax_traj = fig.add_subplot(231, frameon=False)
+    ax_phase = fig.add_subplot(232, frameon=False)
+    ax_vecfield = fig.add_subplot(233, frameon=False)
+    ax_vec_error_abs = fig.add_subplot(234, frameon=False)
+    ax_vec_error_rel = fig.add_subplot(235, frameon=False)
+    ax_energy = fig.add_subplot(236, frameon=False)
+    ax_traj.cla()
+    ax_traj.set_title('Trajectories')
+    ax_traj.set_xlabel('t')
+    ax_traj.set_ylabel('x,y')
+    ax_traj.plot(t.numpy(), x_val[:, 0], t.numpy(), x_val[:, 1], 'g-')
+    ax_traj.plot(t.numpy(), x_t[:, 0], '--', t.numpy(), x_t[:, 1], 'b--')
+    ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
+    ax_traj.set_ylim(-6, 6)
+    ax_traj.legend()
+
+    ax_phase.cla()
+    ax_phase.set_title('Phase Portrait')
+    ax_phase.set_xlabel('theta')
+    ax_phase.set_ylabel('theta_dt')
+    ax_phase.plot(x_val[:, 0], x_val[:, 1], 'g--')
+    ax_phase.plot(x_t[:, 0], x_t[:, 1], 'b--')
+    ax_phase.set_xlim(-6, 6)
+    ax_phase.set_ylim(-6, 6)
+
+    ax_vecfield.cla()
+    ax_vecfield.set_title('Learned Vector Field')
+    ax_vecfield.set_xlabel('theta')
+    ax_vecfield.set_ylabel('theta_dt')
+
+    steps = 61
+    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
+    ref_func = environments.SinglePendulum.SinglePendulum()
+    dydt_ref = ref_func(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
+    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
+    dydt_ref = dydt_ref.reshape(steps, steps, 2)
+
+    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
+        dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
+    else: # is LSTM
+        # Compute artificial x_dot by numerically diffentiating:
+        # x_dot \approx (x_{t+1}-x_t)/dt
+        yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
+        dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
+
+    dydt_abs = dydt.reshape(steps, steps, 2)
+    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
+
+    ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
+    ax_vecfield.set_xlim(-6, 6)
+    ax_vecfield.set_ylim(-6, 6)
+
+    ax_vec_error_abs.cla()
+    ax_vec_error_abs.set_title('Abs. error of thetadot')
+    ax_vec_error_abs.set_xlabel('theta')
+    ax_vec_error_abs.set_ylabel('theta_dt')
+
+    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
+    c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
+    plt.colorbar(c1, ax=ax_vec_error_abs)
+
+    ax_vec_error_abs.set_xlim(-6, 6)
+    ax_vec_error_abs.set_ylim(-6, 6)
+
+    ax_vec_error_rel.cla()
+    ax_vec_error_rel.set_title('Rel. error of thetadot')
+    ax_vec_error_rel.set_xlabel('theta')
+    ax_vec_error_rel.set_ylabel('theta_dt')
+
+    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
+    c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
+    plt.colorbar(c2, ax=ax_vec_error_rel)
+
+    ax_vec_error_rel.set_xlim(-6, 6)
+    ax_vec_error_rel.set_ylim(-6, 6)
+
+    ax_energy.cla()
+    ax_energy.set_title('Total Energy')
+    ax_energy.set_xlabel('t')
+    ax_energy.plot(np.arange(0., x_t.shape[0]*dt, dt), np.array([total_energy(x_) for x_ in x_t]))
+    ax_energy.plot(np.arange(0., x_t.shape[0]*dt, dt), total_energy(x_t))
+
+    fig.tight_layout()
+    plt.savefig(PLOT_DIR + '/{:03d}'.format(epoch))
+    plt.close()
+
+    # Compute Metrics
+    energy_drift_interp = relative_energy_drift(x_t, x_val)
+    phase_error_interp = relative_phase_error(x_t, x_val)
+    traj_err_interp = trajectory_error(x_t, x_val)
+
+
+    wall_time = (datetime.datetime.now()
+                 - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
+    string = "{},{},{},{},{}\n".format(wall_time, epoch,
+                                       energy_drift_interp,
+                                       phase_error_interp,
+                                       traj_err_interp)
+    file_path = (PLOT_DIR + TIME_OF_RUN + "results"
+                 + str(args.lr) + str(args.dataset_size) + str(args.batch_size)
+                 + ".csv")
+    if not os.path.isfile(file_path):
+        title_string = "wall_time,epoch,energy_interp,phase_interp,traj_err_interp\n"
+        fd = open(file_path, 'a')
+        fd.write(title_string)
+        fd.close()
+    fd = open(file_path, 'a')
+    fd.write(string)
+    fd.close()
+
+    # Print Jacobian
+    if ode_model:
+        np.set_printoptions(suppress=True, precision=4, linewidth=150)
+        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
+        jac = tf.zeros((2, 2))
+        for i in range(100):
+            with tf.GradientTape(persistent=True) as g:
+                x = (2 * tf.random.uniform((1, 2)) - 1)
+                g.watch(x)
+                y = model(0, x)
+            jac = jac + g.jacobian(y, x)[0, :, 0]
+        print(jac.numpy()/100)
+
+        with tf.GradientTape(persistent=True) as g:
+            x = tf.zeros([1, 2])
+            g.watch(x)
+            y = model(0, x)
+        print(g.jacobian(y, x)[0, :, 0])
+
+    if args.create_video:
+        x1 = np.sin(x_t[:, 0])
+        y1 = -np.cos(x_t[:, 0])
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, autoscale_on=False, xlim=(-2, 2), ylim=(-2, 2))
+        ax.set_aspect('equal')
+        ax.grid()
+
+        line, = ax.plot([], [], 'o-', lw=2)
+        time_template = 'time = %.1fs'
+        time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
+
+        def animate(i):
+            thisx = [0, x1[i]]
+            thisy = [0, y1[i]]
+
+            line.set_data(thisx, thisy)
+            time_text.set_text(time_template % (i*0.01))
+            return line, time_text
+        def init():
+            line.set_data([], [])
+            time_text.set_text('')
+            return line, time_text
+
+
+        ani = animation.FuncAnimation(fig, animate, range(1, len(x1)),
+                                      interval=dt*len(x1), blit=True, init_func=init)
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=60, metadata=dict(artist='Me'), bitrate=2400)
+        ani.save(PLOT_DIR + 'sp{}.mp4'.format(epoch), writer=writer)
+
+        x1 = np.sin(x_val[:, 0])
+        y1 = -np.cos(x_val[:, 0])
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, autoscale_on=False, xlim=(-2, 2), ylim=(-2, 2))
+        ax.set_aspect('equal')
+        ax.grid()
+
+        line, = ax.plot([], [], 'o-', lw=2)
+        time_template = 'time = %.1fs'
+        time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
+
+        ani = animation.FuncAnimation(fig, animate, range(1, len(x_t)),
+                                      interval=dt*len(x_t), blit=True, init_func=init)
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=60, metadata=dict(artist='Me'), bitrate=2400)
+        ani.save(PLOT_DIR + 'sp_ref.mp4', writer=writer)
+        plt.close()
 
 
 def zero_crossings(x):
