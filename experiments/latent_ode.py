@@ -46,7 +46,7 @@ PLOT_DIR = 'plots/' + config['name'] + '/learnedode/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
-t = tf.range(args.data_size) * config['delta_t']
+t = tf.range(0., args.data_size) * config['delta_t']
 if args.dtype == 'float64':
     t = tf.cast(t, tf.float64)
 

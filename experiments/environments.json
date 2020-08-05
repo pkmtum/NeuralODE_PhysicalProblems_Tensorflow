@@ -8,6 +8,9 @@
         "validation": {
             "extrapolation": [1.5, 1.5, 1.0, 0.5, 1.5, 1.0, 1.5, 1.5],
             "interpolation": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+        },
+        "viz_options": {
+            "vector_field": [0, 1]
         }
     },
     "airplane_long": {
@@ -16,15 +19,12 @@
         "dof": 4,
         "hidden_dim": 32,
         "delta_t": 0.1,
-        "viz_options": [
-            "New York Bulls",
-            "Los Angeles Kings",
-            "Golden State Warriros",
-            "Huston Rocket"
-        ],
         "validation": {
             "extrapolation": [1.5, 1.0, 2.0, 0.5],
             "interpolation": [0.5, 0.5, 0.5, 0.5]
+        },
+        "viz_options": {
+            "vector_field": [0, 1]
         }
     },
     "mass_spring_damper": {
@@ -36,6 +36,9 @@
         "validation": {
             "extrapolation": [5.0, 0.5],
             "interpolation": [1.5, 0.5]
+        },
+        "viz_options": {
+            "vector_field": [0, 1]
         }
     },
     "single_pendulum": {
@@ -46,6 +49,9 @@
         "delta_t": 0.01,
         "validation": {
             "interpolation": [1.5, 0.5]
+        },
+        "viz_options": {
+            "vector_field": [0, 1]
         }
     }
 }

@@ -40,26 +40,28 @@ class RunningAverageMeter():
         self.val = val
 
 
-def create_dataset(n_series, config, samples_per_series=1001):
+def create_dataset(n_series, config, n_steps=1001):
     """Creates a dataset with n_series data series that are each simulated for
-    samples_per_series time steps. The timesteps are delta_t seconds apart.
+    n_steps time steps. The timesteps are delta_t seconds apart.
     # Arguments:
         n_series: int, number of series to create
         config: json, config of the system
-        samples_per_series: int, number of samples per series
+        n_steps: int, number of samples per series
         save_dataset: bool, whether to save the dataset to disk
     # Returns:
-        x_train: np.ndarray, shape=(n_series, samples_per_series, dof)
-        y_train: np.ndarray, shape=(n_series, samples_per_series, dof)
-        x_val: np.ndarray, shape=(n_series, samples_per_series, dof)
-        y_val: np.ndarray, shape=(n_series, samples_per_series, dof)
+        x_train: np.ndarray, shape=(n_series, n_steps, dof)
+        y_train: np.ndarray, shape=(n_series, n_steps, dof)
+        x_val: np.ndarray, shape=(n_series, n_steps, dof)
+        y_val: np.ndarray, shape=(n_series, n_steps, dof)
     """
     # Get the correct reference model from the environments package
     model_func = getattr(getattr(environments, config['ref_model']), config['ref_model'])
+
+    # Sample initial conditions and compute true trajectories
     x0 = (2 * tf.random.uniform((n_series, config['dof'])) - 1)
-    model = model_func(x0=x0)  # compute all trajectories at once
+    model = model_func(x0=x0)
     with tf.device('/gpu:0'):
-        x_train = model.step(dt=(samples_per_series-1)*config['delta_t'], n_steps=samples_per_series)
+        x_train = model.step(dt=(n_steps-1)*config['delta_t'], n_steps=n_steps)
         y_train = np.array(model.call(0., x_train))
     x_train = np.transpose(x_train, [1, 0, 2])
     y_train = np.transpose(y_train, [1, 0, 2])
@@ -70,13 +72,13 @@ def create_dataset(n_series, config, samples_per_series=1001):
     if 'extrapolation' in config['validation']:
         model = model_func(x0=tf.constant(config['validation']['extrapolation']))
         with tf.device('/gpu:0'):
-            x_val.append(model.step(dt=(samples_per_series-1)*config['delta_t'], n_steps=samples_per_series))
+            x_val.append(model.step(dt=(n_steps-1)*config['delta_t'], n_steps=n_steps))
             y_val.append(np.array(model.call(0., x_val[-1])))
     # Interpolation
     if 'interpolation' in config['validation']:
-        model = model_func(x0=tf.constant(config['validation']['extrapolation']))
+        model = model_func(x0=tf.constant(config['validation']['interpolation']))
         with tf.device('/gpu:0'):
-            x_val.append(model.step(dt=(samples_per_series-1)*config['delta_t'], n_steps=samples_per_series))
+            x_val.append(model.step(dt=(n_steps-1)*config['delta_t'], n_steps=n_steps))
             y_val.append(np.array(model.call(0., x_val[-1])))
     x_val = np.stack(x_val)
     y_val = np.stack(y_val)
@@ -106,29 +108,14 @@ def my_mse(y_true, y_pred):
     return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
 
 
-def trajectory_error(x_pred, x_val):
-    return np.mean(np.abs(x_pred - x_val))
-
-
-def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False):
-    if config['name'] == 'airplane_lat_long':
-        return visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
-    elif config['name'] == 'airplane_long':
-        return visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
-    elif config['name'] == 'mass_spring_damper':
-        return visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
-    elif config['name'] == 'single_pendulum':
-        return visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model, epoch, is_mdn)
-
-
 def relative_phase_error(x_pred, x_val, check=True):
     """Computes the relative phase error of x_pred w.r.t. x_true.
-    This is done by finding the locations of the zero crossings in both signals,
-    then corresponding crossings are compared to each other.
+    Finds the locations of the zero crossings in both signals,
+    then compares corresponding crossings to each other.
     # Arguments:
         x_pred: numpy.ndarray shape=(n_datapoints) - predicted time series
         x_true: numpy.ndarray shape=(n_datapoints) - reference time series
-        check: bool - set phase error to nan if the crossings are too different
+        check: bool - set phase error to NaN if the crossings are too different
     """
     ref_crossings = zero_crossings(x_val)
     pred_crossings = zero_crossings(x_pred)
@@ -140,40 +127,124 @@ def relative_phase_error(x_pred, x_val, check=True):
     return phase_error
 
 
-def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False):
-    """Visualize a tf.keras.Model for a 8-dof airplane model.
-    # Arguments:
-        model: A Keras model, that accepts t and x when called
-        x_val: np.ndarray, shape=(1, samples_per_series, 8) or (samples_per_series, 8)
-                The reference time series against which the model will be compared
-        PLOT_DIR: Directory to plot in
-        TIME_OF_RUN: Time at which the run began
-        ode_model: whether the model outputs the derivative of the current step (True),
-                   or the value of the next step (False)
-        args: input arguments from main script
+def trajectory_error(x_pred, x_val):
+    return np.mean(np.abs(x_pred - x_val))
+
+
+def predict_time_series(model, x_val, config, ode_model, is_mdn):
+    """Uses the model to predict the validation trajectories contained in x_val
     """
-    x_val = x_val.reshape(2, -1, config['dof'])
-    dt = config['delta_t']
-    t = tf.range(0., 1001) * dt
+    t = tf.range(0., x_val.shape[1]) * config['delta_t']
+    x_t = np.zeros_like(x_val)
     # Compute the predicted trajectories
     if ode_model:
         x0 = tf.convert_to_tensor(x_val[:, 0])
         x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()
-        x_t_extrap = x_t[:, 0]
-        x_t_interp = x_t[:, 1]
+        x_t = tf.transpose(x_t, [1, 0, 2])
     else:  # LSTM model
-        x_t_extrap = np.zeros_like(x_val[0])
-        x_t_extrap[0] = x_val[0, 0]
-        x_t_interp = np.zeros_like(x_val[1])
-        x_t_interp[0] = x_val[1, 0]
-        # Always injects the entire time series because keras is slow when
-        # using varying series lengths and the future timesteps don't affect
-        # the predictions before it anyways.
+        x_t[:, 0] = x_val[:, 0]
+        # Always injects the entire time series because keras is slow when using
+        # varying series lengths and the future timesteps don't affect the predictions
+        # before it anyways.
         for i in range(1, len(t)):
-            x_t_extrap[i:i+1] = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-            x_t_interp[i:i+1] = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
+            x_t[:, i:i+1] = model(0., x_t)[:, i-1:i]
+    if is_mdn:
+        import mdn
+        for i in range(1, len(t)):
+            pred = model(0., x_t)[:, i-1:i]
+            x_t[i:i+1] = mdn.sample_from_output(pred.numpy()[:, 0], 2, 5, temp=1.)
+    return x_t
 
-    x_t = np.stack([x_t_extrap, x_t_interp], axis=0)
+
+def predict_vector_field(model, config, ode_model, axes=[0, 1]):
+    """Evaluates the model on a plane.
+    """
+    steps = 61
+    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
+    zeros = np.zeros((steps, steps, config['dof']))
+    zeros[..., axes[0]] = x
+    zeros[..., axes[1]] = y
+    ref_func = getattr(getattr(environments, config['ref_model']), config['ref_model'])()
+    dydt_ref = ref_func(0., zeros.reshape(steps * steps, config['dof'])).numpy()
+    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
+    dydt_ref = dydt_ref.reshape(steps, steps, config['dof'])
+
+    if ode_model:  # is Dense-Net or NODE-Net or NODE-e2e
+        dydt = model(0., zeros.reshape(steps * steps, config['dof'])).numpy()
+    else:  # is LSTM
+        # Compute artificial x_dot by numerically diffentiating:
+        # x_dot \approx (x_{t+1}-x_t)/dt
+        yt_1 = model(0., zeros.reshape(steps * steps, 1, config['dof']))[:, 0]
+        dydt = (np.array(yt_1)-zeros.reshape(steps * steps, config['dof'])) / config['delta_t']
+
+    dydt_abs = dydt.reshape(steps, steps, config['dof'])
+    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
+
+    # Clip for better visualization
+    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
+    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
+    return dydt_unit, abs_dif, rel_dif
+
+
+def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
+              ode_model=True, epoch=0, is_mdn=False):
+    # Predict validation trajectories
+    x_t = predict_time_series(model, x_val, config, ode_model, is_mdn)
+    dydt_unit, abs_dif, rel_dif = predict_vector_field(model, config, ode_model)
+    # Do data-set-specific calculation
+    if config['name'] == 'airplane_lat_long':
+        visualize_airplane_lat_long(model,
+                                    x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                                    PLOT_DIR, TIME_OF_RUN, args, config, epoch)
+    elif config['name'] == 'airplane_long':
+        visualize_airplane_long(model,
+                                x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                                PLOT_DIR, TIME_OF_RUN, args, config, epoch)
+    elif config['name'] == 'mass_spring_damper':
+        visualize_mass_spring_damper(model,
+                                     x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                                     PLOT_DIR, TIME_OF_RUN, args, config, epoch)
+    elif config['name'] == 'single_pendulum':
+        visualize_single_pendulum(model,
+                                  x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                                  PLOT_DIR, TIME_OF_RUN, args, config, epoch)
+
+    # Print Jacobian
+    if ode_model:
+        np.set_printoptions(suppress=True, precision=4, linewidth=150)
+        # The first Jacobian is averaged over 100 points sampled from U(-1, 1)
+        jac = tf.zeros((config['dof'], config['dof']))
+        for i in range(100):
+            with tf.GradientTape(persistent=True) as g:
+                x = (2 * tf.random.uniform((1, config['dof'])) - 1)
+                g.watch(x)
+                y = model(0, x)
+            jac = jac + g.jacobian(y, x)[0, :, 0]
+        print(jac.numpy()/100)
+
+        with tf.GradientTape(persistent=True) as g:
+            x = tf.zeros([1, config['dof']])
+            g.watch(x)
+            y = model(0, x)
+        print(g.jacobian(y, x)[0, :, 0])
+
+
+
+def visualize_airplane_lat_long(model,
+                                x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                                PLOT_DIR, TIME_OF_RUN, args, config, epoch=0):
+    """Visualize a tf.keras.Model for a 8-dof airplane model.
+    # Arguments:
+        model: tf.keras.Model - Accepts t and x when called
+        x_val: np.ndarray, shape=(2, samples_per_series, 8) -
+               The reference time series against which the model will be compared
+        PLOT_DIR: str - Directory to plot in
+        TIME_OF_RUN: Time at which the run began
+        args: Input arguments from main script
+        ode_model: whether the model outputs the derivative of the current step (True),
+                   or the value of the next step (False)
+    """
+    t = tf.range(0., x_val.shape[1]) * config['delta_t']
     # Plot the generated trajectories
     fig = plt.figure(figsize=(12, 12), facecolor='white')
     ax_traj = fig.add_subplot(331, frameon=False)
@@ -235,26 +306,7 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
     ax_vecfield.set_xlabel('V')
     ax_vecfield.set_ylabel('gamma')
 
-    steps = 61
-    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
-    zeros = tf.zeros_like(x)
-    input_grid = np.stack([x, y, zeros, zeros, zeros, zeros, zeros, zeros], -1)
-    ref_func = environments.AirplaneLatLong.AirplaneLatLong()
-    dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 8)).numpy()
-    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
-    dydt_ref = dydt_ref.reshape(steps, steps, config['dof'])
-
-    if ode_model:  # is Dense-Net or NODE-Net or NODE-e2e
-        dydt = model(0., input_grid.reshape(steps * steps, config['dof'])).numpy()
-    else:  # is LSTM
-        # Compute artificial x_dot by numerically diffentiating:
-        # x_dot \approx (x_{t+1}-x_t)/d
-        yt_1 = model(0., input_grid.reshape(steps * steps, 1, config['dof']))[:, 0]
-        dydt = (np.array(yt_1)-input_grid.reshape(steps * steps, config['dof'])) / dt
-
-    dydt_abs = dydt.reshape(steps, steps, config['dof'])
-    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
-
+    y, x = np.mgrid[-6:6:complex(0, 61), -6:6:complex(0, 61)]
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-4, 4)
     ax_vecfield.set_ylim(-2, 2)
@@ -263,7 +315,6 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
     ax_vec_error_abs.set_title('Abs. error of V\', gamma\'')
     ax_vec_error_abs.set_xlabel('V')
     ax_vec_error_abs.set_ylabel('gamma')
-    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
 
@@ -275,7 +326,6 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
     ax_vec_error_rel.set_xlabel('V')
     ax_vec_error_rel.set_ylabel('gamma')
 
-    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
     c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
     plt.colorbar(c2, ax=ax_vec_error_rel)
 
@@ -301,7 +351,6 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
 
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
-    print(PLOT_DIR + '{:03d}'.format(epoch), epoch)
     plt.close()
 
     # Compute metrics and save them to csv.
@@ -316,7 +365,6 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
     pe_interp_lat_r = relative_phase_error(x_t[1, :, 5], x_val[1, :, 5], check=False)
     pe_interp_lat_p = relative_phase_error(x_t[1, :, 7], x_val[1, :, 7], check=False)
     traj_error_interp = trajectory_error(x_t[1, :, :4], x_val[1, :, :4])
-
 
     wall_time = (datetime.datetime.now()
                  - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
@@ -346,31 +394,14 @@ def visualize_airplane_lat_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, confi
     fd.write(string)
     fd.close()
 
-    # Print Jacobian
-    if ode_model:
-        np.set_printoptions(suppress=True, precision=4, linewidth=150)
-        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
-        jac = tf.zeros((8, 8))
-        for i in range(100):
-            with tf.GradientTape(persistent=True) as g:
-                x = (2 * tf.random.uniform((1, 8)) - 1)
-                g.watch(x)
-                y = model(0, x)
-            jac = jac + g.jacobian(y, x)[0, :, 0]
-        print(jac.numpy()/100)
 
-        with tf.GradientTape(persistent=True) as g:
-            x = tf.zeros([1, 8])
-            g.watch(x)
-            y = model(0, x)
-        print(g.jacobian(y, x)[0, :, 0])
-
-
-def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, epoch=0, is_mdn=False):
+def visualize_airplane_long(model,
+                            x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                            PLOT_DIR, TIME_OF_RUN, args, config, epoch=0):
     """Visualize a tf.keras.Model for an aircraft model.
     # Arguments:
         model: A Keras model, that accepts t and x when called
-        x_val: np.ndarray, shape=(1, samples_per_series, 4) or (samples_per_series, 4)
+        x_val: np.ndarray, shape=(2, samples_per_series, 4)
                 The reference time series, against which the model will be compared
         PLOT_DIR: Directory to plot in
         TIME_OF_RUN: Time at which the run began
@@ -378,54 +409,7 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
                    or the value of the next step (False)
         args: input arguments from main script
     """
-    def relative_phase_error(x_pred, x_val):
-        """Computes the relative phase error of x_pred w.r.t. x_true.
-        This is done by finding the locations of the zero crossings in both signals,
-        then corresponding crossings are compared to each other.
-        # Arguments:
-            x_pred: numpy.ndarray shape=(n_datapoints, 4) - predicted time series
-            x_true: numpy.ndarray shape=(n_datapoints, 4) - reference time series
-        """
-        # long period
-        ref_crossings = zero_crossings(x_val[:, 0])
-        pred_crossings = zero_crossings(x_pred[:, 0])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error_lp = t_ref/t_pred - 1
-        if len(pred_crossings) < len(ref_crossings) - 2:
-            phase_error_lp = np.nan
-        # short period
-        ref_crossings = zero_crossings(x_val[:, 2])
-        pred_crossings = zero_crossings(x_pred[:, 2])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error_sp = t_ref/t_pred - 1
-        if len(pred_crossings) < len(ref_crossings) - 2:
-            phase_error_sp = np.nan
-        return phase_error_lp, phase_error_sp
-
-    x_val = x_val.reshape(2, -1, 4)
-    dt = 0.1
-    t = tf.linspace(0., 100., int(100./dt)+1)
-    # Compute the predicted trajectories
-    if ode_model:
-        x0 = tf.convert_to_tensor(x_val[:, 0])
-        x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()
-        x_t_extrap = x_t[:, 0]
-        x_t_interp = x_t[:, 1]
-    else: # LSTM model
-        x_t_extrap = np.zeros_like(x_val[0])
-        x_t_extrap[0] = x_val[0, 0]
-        x_t_interp = np.zeros_like(x_val[1])
-        x_t_interp[0] = x_val[1, 0]
-        # Always injects the entire time series because keras is slow when using
-        # varying series lengths and the future timesteps don't affect the predictions
-        # before it anyways.
-        for i in range(1, len(t)):
-            x_t_extrap[i:i+1] = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-            x_t_interp[i:i+1] = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
-
-    x_t = np.stack([x_t_extrap, x_t_interp], axis=0)
+    t = tf.range(0., x_val.shape[1]) * config['delta_t']
     # Plot the generated trajectories
     fig = plt.figure(figsize=(12, 8), facecolor='white')
     ax_traj = fig.add_subplot(231, frameon=False)
@@ -461,26 +445,7 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
     ax_vecfield.set_xlabel('V')
     ax_vecfield.set_ylabel('gamma')
 
-    steps = 61
-    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
-    zeros = tf.zeros_like(x)
-    input_grid = np.stack([x, y, zeros, zeros], -1)
-    ref_func = environments.AirplaneLong.AirplaneLong()
-    dydt_ref = ref_func(0., input_grid.reshape(steps * steps, 4)).numpy()
-    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
-    dydt_ref = dydt_ref.reshape(steps, steps, 4)
-
-    if ode_model:  # is Dense-Net or NODE-Net or NODE-e2e
-        dydt = model(0., input_grid.reshape(steps * steps, 4)).numpy()
-    else:  # is LSTM
-        # Compute artificial x_dot by numerically diffentiating:
-        # x_dot \approx (x_{t+1}-x_t)/d
-        yt_1 = model(0., input_grid.reshape(steps * steps, 1, 4))[:, 0]
-        dydt = (np.array(yt_1)-input_grid.reshape(steps * steps, 4)) / dt
-
-    dydt_abs = dydt.reshape(steps, steps, 4)
-    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
-
+    y, x = np.mgrid[-6:6:complex(0, 61), -6:6:complex(0, 61)]
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-4, 4)
     ax_vecfield.set_ylim(-2, 2)
@@ -489,7 +454,6 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
     ax_vec_error_abs.set_title('Abs. error of V\', gamma\'')
     ax_vec_error_abs.set_xlabel('V')
     ax_vec_error_abs.set_ylabel('gamma')
-    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
 
@@ -501,7 +465,6 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
     ax_vec_error_rel.set_xlabel('V')
     ax_vec_error_rel.set_ylabel('gamma')
 
-    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
     c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
     plt.colorbar(c2, ax=ax_vec_error_rel)
 
@@ -522,12 +485,13 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
     plt.close()
 
     # Compute Metrics
-    phase_error_extrap_lp, phase_error_extrap_sp = relative_phase_error(x_t[0], x_val[0])
+    phase_error_extrap_lp = relative_phase_error(x_t[0, :, 0], x_val[0, :, 0])
+    phase_error_extrap_sp = relative_phase_error(x_t[0, :, 2], x_val[0, :, 2])
     traj_error_extrap = trajectory_error(x_t[0], x_val[0])
 
-    phase_error_interp_lp, phase_error_interp_sp = relative_phase_error(x_t[1], x_val[1])
+    phase_error_interp_lp = relative_phase_error(x_t[1, :, 0], x_val[1, :, 0])
+    phase_error_interp_sp = relative_phase_error(x_t[1, :, 2], x_val[1, :, 2])
     traj_error_interp = trajectory_error(x_t[1], x_val[1])
-
 
     wall_time = (datetime.datetime.now()
                  - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
@@ -552,27 +516,10 @@ def visualize_airplane_long(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, o
     fd.write(string)
     fd.close()
 
-    # Print Jacobian
-    if ode_model:
-        np.set_printoptions(suppress=True, precision=4, linewidth=150)
-        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
-        jac = tf.zeros((4, 4))
-        for i in range(100):
-            with tf.GradientTape(persistent=True) as g:
-                x = (2 * tf.random.uniform((1, 4)) - 1)
-                g.watch(x)
-                y = model(0, x)
-            jac = jac + g.jacobian(y, x)[0, :, 0]
-        print(jac.numpy()/100)
 
-        with tf.GradientTape(persistent=True) as g:
-            x = tf.zeros([1, 4])
-            g.watch(x)
-            y = model(0, x)
-        print(g.jacobian(y, x)[0, :, 0])
-
-
-def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, latent=False, epoch=0, is_mdn=False):
+def visualize_mass_spring_damper(model,
+                                 x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                                 PLOT_DIR, TIME_OF_RUN, args, config, epoch=0):
     """Visualize a tf.keras.Model for a single pendulum.
     # Arguments:
         model: A Keras model, that accepts t and x when called
@@ -584,23 +531,6 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
                    or the value of the next step (False)
         args: input arguments from main script
     """
-    def relative_phase_error(x_pred, x_val):
-        """Computes the relative phase error of x_pred w.r.t. x_true.
-        This is done by finding the locations of the zero crossings in both signals,
-        then corresponding crossings are compared to each other.
-        # Arguments:
-            x_pred: numpy.ndarray shape=(n_datapoints, 2) - predicted time series
-            x_true: numpy.ndarray shape=(n_datapoints, 2) - reference time series
-        """
-        ref_crossings = zero_crossings(x_val[:, 0])
-        pred_crossings = zero_crossings(x_pred[:, 0])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error = t_ref/t_pred - 1
-        if len(pred_crossings) < len(ref_crossings) - 2:
-            phase_error = np.nan
-        return phase_error
-
     def total_energy(state, k=1, m=1):
         """Calculates total energy of a mass-spring-damper system given a state."""
         return 0.5*k*state[..., 0]*state[..., 0]+0.5*m*state[..., 1]*state[..., 1]
@@ -616,36 +546,7 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
         energy_true = total_energy(x_true[t])
         return (energy_pred-energy_true) / energy_true
 
-    x_val = x_val.reshape(2, -1, 2)
-    dt = 0.01
-    t = tf.linspace(0., 10., int(10./dt)+1)
-    # Compute the predicted trajectories
-    if ode_model:
-        x0_extrap = tf.stack([x_val[0, 0]])
-        x_t_extrap = odeint(model, x0_extrap, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-        x0_interp = tf.stack([x_val[1, 0]])
-        x_t_interp = odeint(model, x0_interp, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-    else: # LSTM model
-        x_t_extrap = np.zeros_like(x_val[0])
-        x_t_extrap[0] = x_val[0, 0]
-        x_t_interp = np.zeros_like(x_val[1])
-        x_t_interp[0] = x_val[1, 0]
-        # Always injects the entire time series because keras is slow when using
-        # varying series lengths and the future timesteps don't affect the predictions
-        # before it anyways.
-        if is_mdn:
-            import mdn
-            for i in range(1, len(t)):
-                pred_extrap = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-                x_t_extrap[i:i+1] = mdn.sample_from_output(pred_extrap.numpy()[0], 2, 5, temp=1.)
-                pred_interp = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
-                x_t_interp[i:i+1] = mdn.sample_from_output(pred_interp.numpy()[0], 2, 5, temp=1.)
-        else:
-            for i in range(1, len(t)):
-                x_t_extrap[i:i+1] = model(0., np.expand_dims(x_t_extrap, axis=0))[0, i-1:i]
-                x_t_interp[i:i+1] = model(0., np.expand_dims(x_t_interp, axis=0))[0, i-1:i]
-
-    x_t = np.stack([x_t_extrap, x_t_interp], axis=0)
+    t = tf.range(0., x_val.shape[1]) * config['delta_t']
     # Plot the generated trajectories
     fig = plt.figure(figsize=(12, 8), facecolor='white')
     ax_traj = fig.add_subplot(231, frameon=False)
@@ -680,26 +581,7 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
     ax_vecfield.set_xlabel('x')
     ax_vecfield.set_ylabel('x_dt')
 
-    steps = 61
-    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
-    ref_func = environments.MassSpringDamper.MassSpringDamper()
-    dydt_ref = ref_func(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
-    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
-    dydt_ref = dydt_ref.reshape(steps, steps, 2)
-
-    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
-        dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
-    else: # is LSTM
-        # Compute artificial x_dot by numerically diffentiating:
-        # x_dot \approx (x_{t+1}-x_t)/dt
-        yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
-        if is_mdn: # have to sample from output Gaussians
-            yt_1 = np.apply_along_axis(mdn.sample_from_output, 1, yt_1.numpy(), 2, 5, temp=.1)[:,0]
-        dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
-
-    dydt_abs = dydt.reshape(steps, steps, 2)
-    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True) # make unit vector
-
+    y, x = np.mgrid[-6:6:complex(0, 61), -6:6:complex(0, 61)]
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)
     ax_vecfield.set_ylim(-6, 6)
@@ -709,7 +591,6 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
     ax_vec_error_abs.set_xlabel('x')
     ax_vec_error_abs.set_ylabel('x_dt')
 
-    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
 
@@ -721,7 +602,6 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
     ax_vec_error_rel.set_xlabel('x')
     ax_vec_error_rel.set_ylabel('x_dt')
 
-    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
     c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
     plt.colorbar(c2, ax=ax_vec_error_rel)
 
@@ -731,7 +611,7 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
     ax_energy.cla()
     ax_energy.set_title('Total Energy')
     ax_energy.set_xlabel('t')
-    ax_energy.plot(np.arange(1001)/100.1, np.array([total_energy(x_) for x_ in x_t_interp]))
+    ax_energy.plot(t.numpy(), np.array([total_energy(x_) for x_ in x_t[1]]))
 
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
@@ -739,13 +619,12 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
 
     # Compute Metrics
     energy_drift_extrap = relative_energy_drift(x_t[0], x_val[0])
-    phase_error_extrap = relative_phase_error(x_t[0], x_val[0])
+    phase_error_extrap = relative_phase_error(x_t[0, :, 0], x_val[0, :, 0])
     traj_error_extrap = trajectory_error(x_t[0], x_val[0])
 
     energy_drift_interp = relative_energy_drift(x_t[1], x_val[1])
-    phase_error_interp = relative_phase_error(x_t[1], x_val[1])
+    phase_error_interp = relative_phase_error(x_t[1, :, 0], x_val[1, :, 0])
     traj_error_interp = trajectory_error(x_t[1], x_val[1])
-
 
     wall_time = (datetime.datetime.now()
                  - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
@@ -766,27 +645,10 @@ def visualize_mass_spring_damper(model, x_val, PLOT_DIR, TIME_OF_RUN, args, conf
     fd.write(string)
     fd.close()
 
-    # Print Jacobian
-    if ode_model:
-        np.set_printoptions(suppress=True, precision=4, linewidth=150)
-        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
-        jac = tf.zeros((2, 2))
-        for i in range(100):
-            with tf.GradientTape(persistent=True) as g:
-                x = (2 * tf.random.uniform((1, 2)) - 1)
-                g.watch(x)
-                y = model(0, x)
-            jac = jac + g.jacobian(y, x)[0, :, 0]
-        print(jac.numpy()/100)
 
-        with tf.GradientTape(persistent=True) as g:
-            x = tf.zeros([1, 2])
-            g.watch(x)
-            y = model(0, x)
-        print(g.jacobian(y, x)[0, :, 0])
-
-
-def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config, ode_model=True, latent=False, epoch=0, is_mdn=False):
+def visualize_single_pendulum(model,
+                              x_val, x_t, dydt_unit, abs_dif, rel_dif,
+                              PLOT_DIR, TIME_OF_RUN, args, config, epoch=0):
     """Visualize a tf.keras.Model for a single pendulum.
     # Arguments:
         model: a Keras model
@@ -797,23 +659,6 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
         ode_model: whether the model outputs the derivative of the current step
         args: input arguments from main script
     """
-    def relative_phase_error(x_pred, x_val):
-        """Computes the relative phase error of x_pred w.r.t. x_true.
-        This is done by finding the locations of the zero crossings in both signals,
-        then corresponding crossings are compared to each other.
-        # Arguments:
-            x_pred: numpy.ndarray shape=(n_datapoints, 2) - predicted time series
-            x_true: numpy.ndarray shape=(n_datapoints, 2) - reference time series
-        """
-        ref_crossings = zero_crossings(x_val[:, 0])
-        pred_crossings = zero_crossings(x_pred[:, 0])
-        t_ref = np.mean(np.diff(ref_crossings)) * 2
-        t_pred = np.mean(np.diff(pred_crossings)) * 2
-        phase_error = t_ref/t_pred - 1
-        if len(pred_crossings) < len(ref_crossings) - 2:
-            phase_error = np.nan
-        return phase_error
-
     def total_energy(state, l=1., g=9.81):
         """Calculates total energy of a pendulum system given a state."""
         return (1-np.cos(state[..., 0]))*l*g+state[..., 1]*state[..., 1]*0.5
@@ -829,19 +674,7 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
         energy_true = total_energy(x_true[t])
         return (energy_pred-energy_true) / energy_true
 
-    x_val = x_val.reshape(-1, 2)
-    dt = 0.01
-    t = tf.linspace(0., 10., int(10./dt)+1)
-    # Compute the predicted trajectories
-    if ode_model:
-        x0 = tf.stack([[1.5, .5]])
-        x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5).numpy()[:, 0]
-    else: # is LSTM
-        x_t = np.zeros_like(x_val[0])
-        x_t[0] = x_val[0]
-        for i in range(1, len(t)):
-            x_t[1:i+1] = model(0., np.expand_dims(x_t, axis=0))[0, :i]
-
+    t = tf.range(0., x_val.shape[1]) * config['delta_t']
     fig = plt.figure(figsize=(12, 8), facecolor='white')
     ax_traj = fig.add_subplot(231, frameon=False)
     ax_phase = fig.add_subplot(232, frameon=False)
@@ -853,8 +686,8 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     ax_traj.set_title('Trajectories')
     ax_traj.set_xlabel('t')
     ax_traj.set_ylabel('x,y')
-    ax_traj.plot(t.numpy(), x_val[:, 0], t.numpy(), x_val[:, 1], 'g-')
-    ax_traj.plot(t.numpy(), x_t[:, 0], '--', t.numpy(), x_t[:, 1], 'b--')
+    ax_traj.plot(t.numpy(), x_val[0, :, 0], t.numpy(), x_val[0, :, 1], 'g-')
+    ax_traj.plot(t.numpy(), x_t[0, :, 0], '--', t.numpy(), x_t[0, :, 1], 'b--')
     ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
     ax_traj.set_ylim(-6, 6)
     ax_traj.legend()
@@ -863,8 +696,8 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     ax_phase.set_title('Phase Portrait')
     ax_phase.set_xlabel('theta')
     ax_phase.set_ylabel('theta_dt')
-    ax_phase.plot(x_val[:, 0], x_val[:, 1], 'g--')
-    ax_phase.plot(x_t[:, 0], x_t[:, 1], 'b--')
+    ax_phase.plot(x_val[0, :, 0], x_val[0, :, 1], 'g--')
+    ax_phase.plot(x_t[0, :, 0], x_t[0, :, 1], 'b--')
     ax_phase.set_xlim(-6, 6)
     ax_phase.set_ylim(-6, 6)
 
@@ -873,24 +706,7 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     ax_vecfield.set_xlabel('theta')
     ax_vecfield.set_ylabel('theta_dt')
 
-    steps = 61
-    y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
-    ref_func = environments.SinglePendulum.SinglePendulum()
-    dydt_ref = ref_func(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
-    mag_ref = 1e-8+np.linalg.norm(dydt_ref, axis=-1).reshape(steps, steps)
-    dydt_ref = dydt_ref.reshape(steps, steps, 2)
-
-    if ode_model: # is Dense-Net or NODE-Net or NODE-e2e
-        dydt = model(0., np.stack([x, y], -1).reshape(steps * steps, 2)).numpy()
-    else: # is LSTM
-        # Compute artificial x_dot by numerically diffentiating:
-        # x_dot \approx (x_{t+1}-x_t)/dt
-        yt_1 = model(0., np.stack([x, y], -1).reshape(steps * steps, 1, 2))[:, 0]
-        dydt = (np.array(yt_1)-np.stack([x, y], -1).reshape(steps * steps, 2)) / dt
-
-    dydt_abs = dydt.reshape(steps, steps, 2)
-    dydt_unit = dydt_abs / np.linalg.norm(dydt_abs, axis=-1, keepdims=True)
-
+    y, x = np.mgrid[-6:6:complex(0, 61), -6:6:complex(0, 61)]
     ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
     ax_vecfield.set_xlim(-6, 6)
     ax_vecfield.set_ylim(-6, 6)
@@ -900,7 +716,6 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     ax_vec_error_abs.set_xlabel('theta')
     ax_vec_error_abs.set_ylabel('theta_dt')
 
-    abs_dif = np.clip(np.linalg.norm(dydt_abs-dydt_ref, axis=-1), 0., 3.)
     c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
     plt.colorbar(c1, ax=ax_vec_error_abs)
 
@@ -912,7 +727,6 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     ax_vec_error_rel.set_xlabel('theta')
     ax_vec_error_rel.set_ylabel('theta_dt')
 
-    rel_dif = np.clip(abs_dif / mag_ref, 0., 1.)
     c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
     plt.colorbar(c2, ax=ax_vec_error_rel)
 
@@ -922,8 +736,8 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     ax_energy.cla()
     ax_energy.set_title('Total Energy')
     ax_energy.set_xlabel('t')
-    ax_energy.plot(np.arange(0., x_t.shape[0]*dt, dt), np.array([total_energy(x_) for x_ in x_t]))
-    ax_energy.plot(np.arange(0., x_t.shape[0]*dt, dt), total_energy(x_t))
+    ax_energy.plot(t.numpy(), np.array([total_energy(x_) for x_ in x_t]))
+    ax_energy.plot(t.numpy(), total_energy(x_t))
 
     fig.tight_layout()
     plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
@@ -931,9 +745,8 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
 
     # Compute Metrics
     energy_drift_interp = relative_energy_drift(x_t, x_val)
-    phase_error_interp = relative_phase_error(x_t, x_val)
+    phase_error_interp = relative_phase_error(x_t[0, :, 0], x_val[0, :, 0])
     traj_err_interp = trajectory_error(x_t, x_val)
-
 
     wall_time = (datetime.datetime.now()
                  - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
@@ -952,25 +765,6 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     fd = open(file_path, 'a')
     fd.write(string)
     fd.close()
-
-    # Print Jacobian
-    if ode_model:
-        np.set_printoptions(suppress=True, precision=4, linewidth=150)
-        # The first Jacobian is averaged over 100 randomly sampled points from U(-1, 1)
-        jac = tf.zeros((2, 2))
-        for i in range(100):
-            with tf.GradientTape(persistent=True) as g:
-                x = (2 * tf.random.uniform((1, 2)) - 1)
-                g.watch(x)
-                y = model(0, x)
-            jac = jac + g.jacobian(y, x)[0, :, 0]
-        print(jac.numpy()/100)
-
-        with tf.GradientTape(persistent=True) as g:
-            x = tf.zeros([1, 2])
-            g.watch(x)
-            y = model(0, x)
-        print(g.jacobian(y, x)[0, :, 0])
 
     # if args.create_video:
     #     x1 = np.sin(x_t[:, 0])
@@ -996,7 +790,6 @@ def visualize_single_pendulum(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
     #         line.set_data([], [])
     #         time_text.set_text('')
     #         return line, time_text
-
 
     #     ani = animation.FuncAnimation(fig, animate, range(1, len(x1)),
     #                                   interval=dt*len(x1), blit=True, init_func=init)

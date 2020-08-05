@@ -31,7 +31,6 @@ with open('experiments/environments.json') as json_file:
     environment_configs = json.load(json_file)
 
 config = environment_configs[args.system]
-
 PLOT_DIR = 'plots/' + config['name'] + '/densenet/'
 TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
