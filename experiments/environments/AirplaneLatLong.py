@@ -76,6 +76,7 @@ class AirplaneLatLong(tf.keras.Model):
             abs_dif: np.ndarray, shape(61, 61, 2) -
                 Vector field of the absolute difference to the reference model
             rel_dif: np.ndarray, shape(61, 61, 2) -
+                Vector field of the relative difference to the reference model-
             PLOT_DIR: str - Directory to plot in
             TIME_OF_RUN: str - Time at which the run began
             log_file_path: str - Where to save the log data
@@ -203,8 +204,7 @@ class AirplaneLatLong(tf.keras.Model):
         pe_interp_lat_p = metrics.relative_phase_error(x_t[1, :, 7], x_val[1, :, 7], check=False)
         traj_error_interp = metrics.trajectory_error(x_t[1, :, :4], x_val[1, :, :4])
 
-        wall_time = (datetime.datetime.now()
-                     - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
+        wall_time = (datetime.datetime.now() - TIME_OF_RUN).total_seconds()
 
         string = "{},{},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f}\n".format(
             wall_time, epoch,

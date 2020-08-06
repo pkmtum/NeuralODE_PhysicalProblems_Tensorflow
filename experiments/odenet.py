@@ -39,7 +39,7 @@ config = environment_configs[args.system]
 
 MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 PLOT_DIR = 'plots/' + config['name'] + '/odenet/'
-TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+TIME_OF_RUN = datetime.datetime.now()
 
 makedirs(PLOT_DIR)
 

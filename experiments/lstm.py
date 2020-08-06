@@ -32,7 +32,7 @@ with open('experiments/environments.json') as json_file:
 config = environment_configs[args.system]
 
 PLOT_DIR = 'plots/' + config['name'] + '/lstm/'
-TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+TIME_OF_RUN = datetime.datetime.now()
 
 makedirs(PLOT_DIR)
 

@@ -118,16 +118,16 @@ def predict_time_series(model, x_val, config, ode_model, is_mdn):
         x_t = tf.transpose(x_t, [1, 0, 2])
     else:  # LSTM model
         x_t[:, 0] = x_val[:, 0]
-        # Always injects the entire time series because keras is slow when using
-        # varying series lengths and the future timesteps don't affect the predictions
-        # before it anyways.
+        # Always injects the entire time series because keras is slow
+        # when using varying series lengths and the future timesteps
+        # don't affect the predictions before it anyways.
         for i in range(1, len(t)):
             x_t[:, i:i+1] = model(0., x_t)[:, i-1:i]
-    if is_mdn:
-        import mdn
-        for i in range(1, len(t)):
-            pred = model(0., x_t)[:, i-1:i]
-            x_t[i:i+1] = mdn.sample_from_output(pred.numpy()[:, 0], 2, 5, temp=1.)
+        if is_mdn:
+            import mdn
+            for i in range(1, len(t)):
+                pred = model(0., x_t)[:, i-1:i]
+                x_t[i:i+1] = mdn.sample_from_output(pred.numpy()[:, 0], 2, 5, temp=1.)
     return x_t
 
 
@@ -169,7 +169,7 @@ def visualize(model, x_val, PLOT_DIR, TIME_OF_RUN, args, config,
 
     # Do data-set-specific calculation
     t = tf.range(0., x_val.shape[1]) * config['delta_t']
-    log_file_path = (PLOT_DIR + TIME_OF_RUN + "results"
+    log_file_path = (PLOT_DIR + TIME_OF_RUN.strftime("%Y%m%d-%H%M%S") + "results"
                     + str(args.lr) + str(args.dataset_size) + str(args.batch_size)
                     + ".csv")
 

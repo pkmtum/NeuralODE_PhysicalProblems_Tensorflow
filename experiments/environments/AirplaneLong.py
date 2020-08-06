@@ -60,15 +60,23 @@ class AirplaneLong(tf.keras.Model):
     @staticmethod
     def visualize(t, x_val, x_t, dydt_unit, abs_dif, rel_dif,
                   PLOT_DIR, TIME_OF_RUN, log_file_path, epoch=0):
-        """Visualize a tf.keras.Model for an aircraft model.
+        """Visualize a tf.keras.Model for a 4-dof airplane model.
         # Arguments:
-            x_val: np.ndarray, shape=(2, samples_per_series, 4)
-                    The reference time series, against which the model will be compared
-            PLOT_DIR: Directory to plot in
-            TIME_OF_RUN: Time at which the run began
-            ode_model: whether the model outputs the derivative of the current step (True),
-                    or the value of the next step (False)
-            args: input arguments from main script
+            t: np.ndarray, shape=(samples_per_series) - time of the points in x_val/x_t
+            x_val: np.ndarray, shape=(2, samples_per_series, 4) -
+                The reference time series against which the model will be compared
+            x_t: np.ndarray, shape=(2, samples_per_series, 4) -
+                The predicted time series by the model
+            dydt_unit: np.ndarray, shape(61, 61, 2) -
+                Vector field normalized to unit length
+            abs_dif: np.ndarray, shape(61, 61, 2) -
+                Vector field of the absolute difference to the reference model
+            rel_dif: np.ndarray, shape(61, 61, 2) -
+                Vector field of the relative difference to the reference model-
+            PLOT_DIR: str - Directory to plot in
+            TIME_OF_RUN: str - Time at which the run began
+            log_file_path: str - Where to save the log data
+            epoch: int
         """
         # Plot the generated trajectories
         fig = plt.figure(figsize=(12, 8), facecolor='white')
@@ -153,8 +161,8 @@ class AirplaneLong(tf.keras.Model):
         phase_error_interp_sp = metrics.relative_phase_error(x_t[1, :, 2], x_val[1, :, 2])
         traj_error_interp = metrics.trajectory_error(x_t[1], x_val[1])
 
-        wall_time = (datetime.datetime.now()
-                    - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
+        wall_time = (datetime.datetime.now() - TIME_OF_RUN).total_seconds()
+
         string = "{},{},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f},{:.7f}\n".format(
             wall_time, epoch,
             phase_error_interp_lp, phase_error_interp_sp,

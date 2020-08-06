@@ -30,11 +30,6 @@ parser.add_argument('--adjoint', type=eval, default=False)
 parser.add_argument('--dtype', type=str, choices=['float32', 'float64'], default='float32')
 args = parser.parse_args()
 
-with open('experiments/environments.json') as json_file:
-    environment_configs = json.load(json_file)
-
-config = environment_configs[args.system]
-
 tf.keras.backend.set_floatx(args.dtype)
 
 if args.adjoint:
@@ -42,8 +37,13 @@ if args.adjoint:
 else:
     from tfdiffeq import odeint
 
+with open('experiments/environments.json') as json_file:
+    environment_configs = json.load(json_file)
+
+config = environment_configs[args.system]
+
 PLOT_DIR = 'plots/' + config['name'] + '/learnedode/'
-TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+TIME_OF_RUN = datetime.datetime.now()
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
 t = tf.range(0., args.data_size) * config['delta_t']
@@ -82,9 +82,9 @@ class ODEFunc(tf.keras.Model):
     def __init__(self, **kwargs):
         super(ODEFunc, self).__init__(**kwargs)
 
-        self.x1 = tf.keras.layers.Dense(64, activation='sigmoid')
-        self.x2 = tf.keras.layers.Dense(64, activation='sigmoid')
-        self.y = tf.keras.layers.Dense(x_train.shape[-1])
+        self.x1 = tf.keras.layers.Dense(config['hidden_dim'], activation='sigmoid')
+        self.x2 = tf.keras.layers.Dense(config['hidden_dim'], activation='sigmoid')
+        self.y = tf.keras.layers.Dense(config['dof'])
         self.nfe = tf.Variable(0., trainable=False)
 
     @tf.function

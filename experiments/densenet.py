@@ -32,7 +32,7 @@ with open('experiments/environments.json') as json_file:
 
 config = environment_configs[args.system]
 PLOT_DIR = 'plots/' + config['name'] + '/densenet/'
-TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+TIME_OF_RUN = datetime.datetime.now()
 
 makedirs(PLOT_DIR)
 
@@ -51,9 +51,9 @@ x_train = x_train[c[::int(100/args.dataset_size)]]
 y_train = y_train[c[::int(100/args.dataset_size)]]
 
 model = Sequential()
-model.add(Dense(config['hidden_dim'], 'sigmoid', kernel_regularizer=l2(1e-6),
+model.add(Dense(config['hidden_dim'], 'relu', kernel_regularizer=l2(1e-6),
                 input_shape=(config['dof'],)))
-model.add(Dense(config['hidden_dim'], 'sigmoid', kernel_regularizer=l2(1e-6)))
+model.add(Dense(config['hidden_dim'], 'relu', kernel_regularizer=l2(1e-6)))
 model.add(Dense(config['dof']))
 
 adam = Adam(lr=args.lr)

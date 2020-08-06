@@ -63,18 +63,27 @@ class SinglePendulum(tf.keras.Model):
         self.x = odeint(self.call, self.x, t, *args, **kwargs)
         return self.x
 
-
     @staticmethod
     def visualize(t, x_val, x_t, dydt_unit, abs_dif, rel_dif,
                   PLOT_DIR, TIME_OF_RUN, log_file_path, epoch=0):
         """Visualize a tf.keras.Model for a single pendulum.
         # Arguments:
-            x_val: np.ndarray, shape=(1, samples_per_series, 2) or (samples_per_series, 2)
-                    The reference time series, against which the model will be compared
-            PLOT_DIR: dir to plot in
-            TIME_OF_RUN: time of the run
-            ode_model: whether the model outputs the derivative of the current step
-            args: input arguments from main script
+            t: np.ndarray, shape=(samples_per_series) -
+                time of the points in x_val/x_t
+            x_val: np.ndarray, shape=(2, samples_per_series, 8) -
+                The reference time series against which the model will be compared
+            x_t: np.ndarray, shape=(2, samples_per_series, 8) -
+                The predicted time series by the model
+            dydt_unit: np.ndarray, shape(61, 61, 2) -
+                Vector field normalized to unit length
+            abs_dif: np.ndarray, shape(61, 61, 2) -
+                Vector field of the absolute difference to the reference model
+            rel_dif: np.ndarray, shape(61, 61, 2) -
+                Vector field of the relative difference to the reference model-
+            PLOT_DIR: str - Directory to plot in
+            TIME_OF_RUN: datetime object - Time at which the run began
+            log_file_path: str - Where to save the log data
+            epoch: int
         """
         def total_energy(state, l=1., g=9.81):
             """Calculates total energy of a pendulum system given a state."""
@@ -112,7 +121,8 @@ class SinglePendulum(tf.keras.Model):
         ax_vecfield.set_ylabel('theta_dt')
 
         y, x = np.mgrid[-6:6:complex(0, 61), -6:6:complex(0, 61)]
-        ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
+        ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1],
+                               color="black")
         ax_vecfield.set_xlim(-6, 6)
         ax_vecfield.set_ylim(-6, 6)
 
@@ -155,8 +165,8 @@ class SinglePendulum(tf.keras.Model):
         phase_error_interp = metrics.relative_phase_error(x_t[0, :, 0], x_val[0, :, 0])
         traj_err_interp = metrics.trajectory_error(x_t, x_val)
 
-        wall_time = (datetime.datetime.now()
-                    - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
+        wall_time = (datetime.datetime.now() - TIME_OF_RUN).total_seconds()
+
         string = "{},{},{},{},{}\n".format(wall_time, epoch,
                                            energy_drift_interp,
                                            phase_error_interp,

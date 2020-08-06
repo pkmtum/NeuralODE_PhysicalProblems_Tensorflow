@@ -62,13 +62,24 @@ class MassSpringDamper(tf.keras.Model):
     @staticmethod
     def visualize(t, x_val, x_t, dydt_unit, abs_dif, rel_dif,
                   PLOT_DIR, TIME_OF_RUN, log_file_path, epoch=0):
-        """Visualize a mass spring damper model.
+        """Visualize a tf.keras.Model for a mass-spring-damper.
         # Arguments:
-            x_val: np.ndarray, shape=(1, samples_per_series, 2) or (samples_per_series, 2)
-                    The reference time series, against which the model will be compared
-            PLOT_DIR: Directory to plot in
-            TIME_OF_RUN: Time at which the run began
-            args: input arguments from main script
+            t: np.ndarray, shape=(samples_per_series) -
+                time of the points in x_val/x_t
+            x_val: np.ndarray, shape=(2, samples_per_series, 8) -
+                The reference time series against which the model will be compared
+            x_t: np.ndarray, shape=(2, samples_per_series, 8) -
+                The predicted time series by the model
+            dydt_unit: np.ndarray, shape(61, 61, 2) -
+                Vector field normalized to unit length
+            abs_dif: np.ndarray, shape(61, 61, 2) -
+                Vector field of the absolute difference to the reference model
+            rel_dif: np.ndarray, shape(61, 61, 2) -
+                Vector field of the relative difference to the reference model-
+            PLOT_DIR: str - Directory to plot in
+            TIME_OF_RUN: str - Time at which the run began
+            log_file_path: str - Where to save the log data
+            epoch: int
         """
         def total_energy(state, k=1, m=1):
             """Calculates total energy of a mass-spring-damper system given a state."""
@@ -159,8 +170,8 @@ class MassSpringDamper(tf.keras.Model):
         phase_error_interp = metrics.relative_phase_error(x_t[1, :, 0], x_val[1, :, 0])
         traj_error_interp = metrics.trajectory_error(x_t[1], x_val[1])
 
-        wall_time = (datetime.datetime.now()
-                    - datetime.datetime.strptime(TIME_OF_RUN, "%Y%m%d-%H%M%S")).total_seconds()
+        wall_time = (datetime.datetime.now() - TIME_OF_RUN).total_seconds()
+
         string = "{},{},{},{},{},{},{},{}\n".format(wall_time, epoch,
                                                     energy_drift_interp, energy_drift_extrap,
                                                     phase_error_interp, phase_error_extrap,

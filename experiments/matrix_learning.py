@@ -46,7 +46,7 @@ else:
     from tfdiffeq import odeint
 
 PLOT_DIR = 'plots/' + config['name'] + '/matrix_learning/'
-TIME_OF_RUN = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+TIME_OF_RUN = datetime.datetime.now()
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
 t = tf.range(args.data_size) * config['delta_t']

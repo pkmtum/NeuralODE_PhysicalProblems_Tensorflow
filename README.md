@@ -9,8 +9,8 @@ python3 experiments/densenet.py --system=airplane_lat_long
 
 # Add your own systems
 
-If you would like to test models on your own system, simply create a file in the
-'environments' folder and add your configuration to the 'environments.json' file.
+If you would like to test models on your own physical systems, simply create a file in the
+'experiments/environments/' folder and add your configuration to the 'environments.json' file.
 
 ## Requirements
 * TensorFlow 2.2
