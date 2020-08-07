@@ -6,12 +6,13 @@ import numpy as np
 def pretty_print_latex(matrix):
     """Prints matrix in a format that can be pasted into Latex"""
     row = ""
-    for loss in matrix[[2, 3, 4, 5, 6, 7]]:
-        if loss < 1e-2: # use scientific notation
+    for loss in matrix[[3, 5, 2, 4, 6, 7]]:
+        if loss < 1e-2:  # use scientific notation
             row += (" {0:.1e}          &".format(float(loss))).replace('-0', '-')
         else:
             row += " {0:.3f}           &".format(float(loss))
     print(row)
+
 
 def parse_filename(file):
     name = file.split('results')[-1]
@@ -23,23 +24,24 @@ def parse_filename(file):
         return '1'
     return
 
+
 for model in ['odenet', 'densenet', 'node-e2e', 'lstm']:
-    files = [file for file in os.listdir('plots/mass_spring_damper/' + model + '/')
-                if (file.endswith('.csv') and not file.startswith('.'))]
+    files = [file for file in os.listdir('plots/double_pendulum/' + model + '/')
+             if (file.endswith('.csv') and not file.startswith('.'))]
 
     results_1 = []
     results_10 = []
     results_100 = []
 
     for file in files:
-        path = 'plots/mass_spring_damper/' + model + '/' + file
+        path = 'plots/double_pendulum/' + model + '/' + file
         dataset = parse_filename(file)
         csv = pd.read_csv(path, header=0)
         if dataset == '1':
             results_1.append(csv.values[-1])
-        if dataset == '10':
+        elif dataset == '10':
             results_10.append(csv.values[-1])
-        if dataset == '100':
+        elif dataset == '100':
             results_100.append(csv.values[-1])
 
     n_1 = len(results_1)

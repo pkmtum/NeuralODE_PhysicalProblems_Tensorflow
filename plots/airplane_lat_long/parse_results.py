@@ -23,7 +23,7 @@ def parse_filename(file):
         return '1'
     return
 
-for model in ['odenet', 'densenet', 'learnedode', 'lstm']:
+for model in ['odenet', 'densenet', 'node-e2e', 'lstm']:
     files = [file for file in os.listdir('plots/airplane_lat_long/' + model + '/')
              if (file.endswith('.csv') and not file.startswith('.'))]
 

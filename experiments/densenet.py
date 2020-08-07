@@ -1,5 +1,5 @@
 """
-Airplane system experiment, longitudinal and lateral motion, Dense-Net.
+Experiments with Dense-Net.
 """
 import argparse
 import datetime
@@ -11,7 +11,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
+from utils import create_dataset, load_dataset, lr_scheduler, makedirs, modelFunc, my_mse, visualize
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
@@ -66,18 +66,9 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 epoch_multi = 10  # we can afford to train regular NN's for longer
 
+scheduler = lr_scheduler(epoch_multi, args.lr)
 
-def lr_scheduler(epoch):
-    if epoch < 5*epoch_multi:
-        return args.lr
-    if epoch < 8*epoch_multi:
-        return args.lr * 0.1
-    if epoch < 10*epoch_multi:
-        return args.lr * 0.01
-    return args.lr * 0.001
-
-
-learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
+learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 
 for epoch in range(10):
     model.fit(x_train, y_train,

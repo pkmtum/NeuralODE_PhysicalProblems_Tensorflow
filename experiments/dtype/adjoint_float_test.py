@@ -1,6 +1,6 @@
 """Comparision of the adjoint method with regular backpropagation.
-Uses the simple test equation: 
-$ f(T) = \int_{0}^{T}x dt$ 
+Uses the simple test equation:
+$ f(T) = \int_{0}^{T}x dt$
 subject to $ \dot{x} = bx $
 $ x(0) = a $
 Also compares tf.float32 to tf.float64.
@@ -13,6 +13,7 @@ from tfdiffeq import odeint_adjoint
 
 dtypes = [tf.float32, tf.float64]
 tf.keras.backend.set_floatx('float64')
+
 
 class ODE(tf.keras.Model):
 
@@ -28,11 +29,14 @@ class ODE(tf.keras.Model):
         dX_dT = self.a*tf.math.exp(self.b*t)
         return dX_dT
 
+
 def exact_solution(a, b, T):
     return a/b*(np.exp(b*T)-1)
 
+
 def exact_derivative(a, b, T):
     return a*(T/b*np.exp(b*T)-(np.exp(b*T)-1)/(b*b))
+
 
 file_path = 'plots/dtype/adjoint_float_test.csv'
 title_string = "dtype,rtol,method,error,fwd_pass,bwd_pass,nfe,nbe\n"
@@ -45,7 +49,7 @@ for dtype in dtypes:
         tf.keras.backend.set_floatx('float32')
     else:
         tf.keras.backend.set_floatx('float64')
-    x_0 = tf.constant(1., dtype=dtype) # not important for Gradient
+    x_0 = tf.constant(1., dtype=dtype)  # not important for Gradient
     a = tf.constant(2., dtype=dtype)
     b = tf.constant(2., dtype=dtype)
     T = tf.constant(2., dtype=dtype)
@@ -54,7 +58,7 @@ for dtype in dtypes:
     odemodel = ODE(a, b, dtype)
     for rtol in np.logspace(-13, 0, 14)[::-1]:
         print('rtol:', rtol)
-        # Run forward and backward passes, while tracking the time 
+        # Run forward and backward passes, while tracking the time
         with tf.device('/gpu:0'):
             t0 = time.time()
             with tf.GradientTape() as g:

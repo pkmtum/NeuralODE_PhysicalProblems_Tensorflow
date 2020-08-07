@@ -1,13 +1,15 @@
+"""Functions to compute the physics-based metrics.
+"""
 import numpy as np
 
 
 def relative_energy_drift(energy_pred, energy_true):
-            """Computes the relative energy drift of x_pred w.r.t. x_true
-            # Arguments:
-                energy_pred: float - predicted energy
-                energy_true: float - reference energy
-            """
-            return (energy_pred-energy_true) / energy_true
+    """Computes the relative energy drift of x_pred w.r.t. x_true
+    # Arguments:
+        energy_pred: float - predicted energy
+        energy_true: float - reference energy
+    """
+    return (energy_pred-energy_true) / energy_true
 
 
 def relative_phase_error(x_pred, x_val, check=True):

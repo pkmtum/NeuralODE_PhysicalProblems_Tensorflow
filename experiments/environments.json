@@ -10,7 +10,10 @@
             "interpolation": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
         },
         "viz_options": {
-            "vector_field": [0, 1]
+            "vector_field": {
+                "axes": [0, 1],
+                "axes_range": [-6, 6]
+            }
         }
     },
     "airplane_long": {
@@ -24,7 +27,10 @@
             "interpolation": [0.5, 0.5, 0.5, 0.5]
         },
         "viz_options": {
-            "vector_field": [0, 1]
+            "vector_field": {
+                "axes": [0, 1],
+                "axes_range": [-6, 6]
+            }
         }
     },
     "mass_spring_damper": {
@@ -38,7 +44,10 @@
             "interpolation": [1.5, 0.5]
         },
         "viz_options": {
-            "vector_field": [0, 1]
+            "vector_field": {
+                "axes": [0, 1],
+                "axes_range": [-6, 6]
+            }
         }
     },
     "single_pendulum": {
@@ -51,7 +60,27 @@
             "interpolation": [1.5, 0.5]
         },
         "viz_options": {
-            "vector_field": [0, 1]
+            "vector_field": {
+                "axes": [0, 1],
+                "axes_range": [-6, 6]
+            }
+        }
+    },
+    "double_pendulum": {
+        "name": "double_pendulum",
+        "ref_model": "DoublePendulum",
+        "dof": 4,
+        "hidden_dim": 32,
+        "delta_t": 0.01,
+        "validation": {
+            "extrapolation": [1.3, 0.5, 0.5, -0.5],
+            "interpolation": [0.5, 0.5, 0.5, 0.5]
+        },
+        "viz_options": {
+            "vector_field": {
+                "axes": [0, 1],
+                "axes_range": [-3, 3]
+            }
         }
     }
 }

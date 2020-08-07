@@ -11,6 +11,7 @@ tf.random.set_seed(0)
 dtypes = [tf.float32, tf.float64]
 tf.keras.backend.set_floatx('float64')
 
+
 class ODE(tf.keras.Model):
 
     def __init__(self, dtype):
@@ -36,14 +37,16 @@ class ODE(tf.keras.Model):
         dX_dT = self.dense2(x)
         return self.reshape(dX_dT)
 
+
 file_path = 'plots/dtype/adjoint_float_test_nn.csv'
 title_string = "dtype,rtol,method,error,fwd_pass,bwd_pass,nfe,nbe\n"
 fd = open(file_path, 'w')
 fd.write(title_string)
 fd.close()
 
+
 # Compute the reference gradient
-x_0_64 = tf.random.uniform([16, 14, 14, 8], dtype=tf.float64)#tf.constant([[1., 10.]], dtype=tf.float64)
+x_0_64 = tf.random.uniform([16, 14, 14, 8], dtype=tf.float64)
 t = tf.cast(tf.linspace(0., 2., 2), tf.float64)
 odemodel_exact = ODE(dtype=tf.float64)
 
@@ -98,11 +101,13 @@ for dtype in dtypes:
         # gradient L2-norm error.
         rel_err_adj = 0
         for x, x_ex in zip(dYdX_adjoint, dYdX_exact):
-            rel_err_adj = max((tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))).numpy(), rel_err_adj)
+            err = tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))
+            rel_err_adj = max(err.numpy(), rel_err_adj)
 
         rel_err_bp = 0
         for x, x_ex in zip(dYdX_backprop, dYdX_exact):
-            rel_err_bp = max((tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))).numpy(), rel_err_bp)
+            err = tf.norm(x-tf.cast(x_ex, dtype))/tf.norm(tf.cast(x_ex, dtype))
+            rel_err_bp = max(err.numpy(), rel_err_bp)
 
         print('Adjoint:', rel_err_adj, dtype)
         print('Backprop:', rel_err_bp, dtype)

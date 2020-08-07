@@ -11,7 +11,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense, LSTM
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
+from utils import create_dataset, load_dataset, lr_scheduler, makedirs, modelFunc, my_mse, visualize
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
@@ -63,9 +63,9 @@ class TrainDatagen(tf.keras.utils.Sequence):
             np.arange(y_train.shape[1] - args.batch_time,
                       dtype=np.int64), args.batch_size,
             replace=True)
-
-        batch_x = np.stack([x_train[n, s+i] for i in range(args.batch_time)], axis=1)  # (T, M, D)
-        batch_y = np.stack([y_train[n, s+i] for i in range(args.batch_time)], axis=1)  # (T, M, D)
+        # (B, T, D)
+        batch_x = np.stack([x_train[n, s+i] for i in range(args.batch_time)], axis=1)
+        batch_y = np.stack([y_train[n, s+i] for i in range(args.batch_time)], axis=1)
         return batch_x, batch_y
 
 
@@ -77,26 +77,17 @@ adam = Adam(lr=args.lr)
 
 model.compile(loss='mse', optimizer=adam, metrics=['mae', my_mse])
 
-log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") \
-          + '_' + config['name'] + '_lstm_' + str(args.dataset_size) + '_' + str(args.batch_time) \
-          + '_' + str(args.batch_size)
+log_dir = ("logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+           + '_' + config['name'] + '_lstm_' + str(args.dataset_size) + '_'
+           + str(args.batch_time) + '_' + str(args.batch_size))
 tensorboard_callback = tf.keras.callbacks.TensorBoard(
     log_dir=log_dir, histogram_freq=1, profile_batch=0)
 
 epoch_multi = 10
 
+scheduler = lr_scheduler(epoch_multi, args.lr)
 
-def lr_scheduler(epoch):
-    if epoch < 5*epoch_multi:
-        return args.lr
-    if epoch < 8*epoch_multi:
-        return args.lr * 0.1
-    if epoch < 10*epoch_multi:
-        return args.lr * 0.01
-    return args.lr * 0.001
-
-
-learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
+learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 
 train_datagen = TrainDatagen()
 for epoch in range(10):

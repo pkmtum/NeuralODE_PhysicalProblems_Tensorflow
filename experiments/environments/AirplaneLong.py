@@ -67,12 +67,12 @@ class AirplaneLong(tf.keras.Model):
                 The reference time series against which the model will be compared
             x_t: np.ndarray, shape=(2, samples_per_series, 4) -
                 The predicted time series by the model
-            dydt_unit: np.ndarray, shape(61, 61, 2) -
+            dydt_unit: np.ndarray, shape=dydt_unit.shape -
                 Vector field normalized to unit length
-            abs_dif: np.ndarray, shape(61, 61, 2) -
+            abs_dif: np.ndarray, shape=dydt_unit.shape -
                 Vector field of the absolute difference to the reference model
-            rel_dif: np.ndarray, shape(61, 61, 2) -
-                Vector field of the relative difference to the reference model-
+            rel_dif: np.ndarray, shape=dydt_unit.shape -
+                Vector field of the relative difference to the reference model
             PLOT_DIR: str - Directory to plot in
             TIME_OF_RUN: str - Time at which the run began
             log_file_path: str - Where to save the log data
@@ -113,7 +113,8 @@ class AirplaneLong(tf.keras.Model):
         ax_vecfield.set_xlabel('V')
         ax_vecfield.set_ylabel('gamma')
 
-        y, x = np.mgrid[-6:6:complex(0, 61), -6:6:complex(0, 61)]
+        steps = dydt_unit.shape[0]
+        y, x = np.mgrid[-6:6:complex(0, steps), -6:6:complex(0, steps)]
         ax_vecfield.streamplot(x, y, dydt_unit[:, :, 0], dydt_unit[:, :, 1], color="black")
         ax_vecfield.set_xlim(-4, 4)
         ax_vecfield.set_ylim(-2, 2)

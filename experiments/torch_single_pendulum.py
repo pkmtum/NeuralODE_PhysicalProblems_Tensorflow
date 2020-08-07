@@ -4,6 +4,7 @@ Single Pendulum experiment.
 from environments.SinglePendulum import SinglePendulum
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
 import torch
 import torch.nn as nn
 import argparse
@@ -38,9 +39,10 @@ def visualize_single_pendulum_model(model, epoch=0):
     dt = 0.01
     x0 = torch.tensor([1.01, 5.], dtype=torch.float32, device=device)
     model_func = modelFunc(model)
-    x_t = odeint(model_func, x0, torch.linspace(0., 10., int(10./dt)).to(x0)).cpu().detach().numpy()
+    x_t = odeint(model_func, x0, torch.linspace(0., 10., int(10./dt)).to(x0))
+    x_t = x_t.cpu().detach().numpy()
 
-    ref_pendulum = SinglePendulum(x0=tf.constant([1.01, 5.])
+    ref_pendulum = SinglePendulum(x0=tf.constant([1.01, 5.]))
     x_t_ref = np.array(ref_pendulum.step(dt=999*0.01, n_steps=1000))
     plt.close()
     plt.scatter(x_t_ref[:, 0], x_t_ref[:, 1], c=np.linspace(0., 255., x_t.shape[0]), cmap='magma')
@@ -125,6 +127,7 @@ def load_dataset_single_pendulum():
     x_val = np.load('experiments/datasets/single_pendulum_x_val.npy')
     y_val = np.load('experiments/datasets/single_pendulum_y_val.npy')
     return x_train, y_train, x_val, y_val
+
 
 class ODEFunc(nn.Module):
     def __init__(self, hidden_dim, augment_dim=0, time_dependent=True, **kwargs):
@@ -246,15 +249,15 @@ for epoch in range(10):
 
     with torch.no_grad():
         val_loss = criterion(model(torch.tensor(x_val, dtype=torch.float32, device=device)),
-                                   torch.tensor(y_val, dtype=torch.float32, device=device))
+                             torch.tensor(y_val, dtype=torch.float32, device=device))
         train_loss = criterion(model(torch.tensor(x_train, dtype=torch.float32, device=device)),
-                                   torch.tensor(y_train, dtype=torch.float32, device=device))
+                               torch.tensor(y_train, dtype=torch.float32, device=device))
 
         logger.info(
             "Epoch {:04d} | Time {:.3f} ({:.3f}) | "
             "Train Loss {:.4f} | Test Loss {:.4f}".format(
                 epoch, batch_time_meter.val, batch_time_meter.avg,
-                 train_loss, val_loss
+                train_loss, val_loss
             )
         )
 

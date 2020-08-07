@@ -3,6 +3,7 @@ Single Pendulum experiment, NODE-e2e.
 """
 import argparse
 import datetime
+import json
 import os
 import time
 import numpy as np
@@ -16,7 +17,8 @@ tf.config.experimental.set_virtual_device_configuration(
 
 parser = argparse.ArgumentParser('ODE demo')
 parser.add_argument('--system', type=str, default='single_pendulum')
-parser.add_argument('--method', type=str, choices=['dopri5', 'adams', 'euler', 'midpoint'], default='dopri5')
+parser.add_argument('--method', type=str,
+                    choices=['dopri5', 'adams', 'euler', 'midpoint'], default='dopri5')
 parser.add_argument('--data_size', type=int, default=1001)
 parser.add_argument('--dataset_size', type=int, choices=[100], default=100)
 parser.add_argument('--lr', type=float, default=0.01)
@@ -39,7 +41,7 @@ with open('experiments/environments.json') as json_file:
 
 config = environment_configs[args.system]
 
-PLOT_DIR = 'plots/' + config['name'] + '/learnedode/'
+PLOT_DIR = 'plots/' + config['name'] + '/node-e2e/'
 TIME_OF_RUN = datetime.datetime.now()
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
@@ -69,7 +71,7 @@ def get_batch():
 
     batch_x0 = tf.convert_to_tensor(x_train[n, s])  # (M, D)
     batch_t = t[:args.batch_time]  # (T)
-    batch_x = tf.stack([x_train[n, s + i] for i in range(args.batch_time)], axis=0)  # (T, M, D)
+    batch_x = tf.stack([x_train[n, s + i] for i in range(args.batch_time)])  # (T, M, D)
     return batch_x0, batch_t, batch_x
 
 
@@ -107,11 +109,12 @@ if __name__ == '__main__':
         for itr in range(1, args.niters + 1):
             with tf.GradientTape() as tape:
                 batch_x0, batch_t, batch_x = get_batch()
-                pred_x = odeint(func, batch_x0, batch_t, method=args.method) # (T, B, D)
-                loss = tf.reduce_mean(tf.reduce_sum(tf.math.square(pred_x - batch_x), axis=-1))
+                pred_x = odeint(func, batch_x0, batch_t, method=args.method)  # (T, B, D)
+                ex_loss = tf.reduce_sum(tf.math.square(pred_x-batch_x), axis=-1)  # (T, B)
+                loss = tf.reduce_mean(ex_loss)
                 weights = [v for v in func.trainable_variables if 'bias' not in v.name]
-                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights]) * 1e-5
-                loss = loss + l2_loss
+                l2_loss = tf.add_n([tf.reduce_sum(tf.math.square(v)) for v in weights])
+                loss = loss + (l2_loss * 1e-6)
 
             nfe = func.nfe.numpy()
             func.nfe.assign(0.)
@@ -138,10 +141,9 @@ if __name__ == '__main__':
                 pred_x = odeint(func, x_val[0], t, method='midpoint')
                 loss = tf.reduce_mean(tf.abs(pred_x - x_val))
                 print('Midpoint', loss.numpy())
-                print('Iter {:04d} | Total Loss {:.6f} | Time for batch {:,.4f}'.format(itr,
-                                                                                        loss.numpy(),
-                                                                                        time_meter.avg))
-            if itr == int(args.niters*0.5): # aligns with the other datasets
+                print('Iter {:04d} | Total Loss {:.6f} | Time for batch {:,.4f}'.format(
+                      itr, loss.numpy(), time_meter.avg))
+            if itr == int(args.niters*0.5):  # aligns with the other datasets
                 optimizer.lr = optimizer.lr * 0.1
             if itr == int(args.niters*0.7):
                 optimizer.lr = optimizer.lr * 0.1

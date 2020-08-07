@@ -10,7 +10,7 @@ import tensorflow as tf
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
-from utils import create_dataset, load_dataset, makedirs, modelFunc, my_mse, visualize
+from utils import create_dataset, load_dataset, lr_scheduler, makedirs, modelFunc, my_mse, visualize
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_virtual_device_configuration(
@@ -197,18 +197,8 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(
 
 epoch_multi = 5
 
-
-def lr_scheduler(epoch):
-    if epoch < 5*epoch_multi:
-        return args.lr
-    if epoch < 8*epoch_multi:
-        return args.lr * 0.1
-    if epoch < 10*epoch_multi:
-        return args.lr * 0.01
-    return args.lr * 0.001
-
-
-learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
+scheduler = lr_scheduler(epoch_multi, args.lr)
+learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 for epoch in range(10):
     model.fit(x_train, y_train,
               epochs=epoch_multi*(epoch+1),
