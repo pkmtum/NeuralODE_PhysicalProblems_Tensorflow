@@ -80,7 +80,7 @@ for dtype in dtypes:
         if hasattr(exact_layer, 'bias'):
             layer.bias.assign(tf.cast(exact_layer.bias, dtype))
 
-    for rtol in np.logspace(-13, 0, 14)[::-1]:
+    for rtol in np.logspace(-13, 0, 53)[::-1]:
         print('rtol:', rtol)
         # Don't run low tolerances with f32, they run for extremely long.
         if rtol <= 1e-11 and dtype == tf.float32:

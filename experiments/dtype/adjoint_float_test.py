@@ -56,7 +56,7 @@ for dtype in dtypes:
     t = tf.cast(tf.linspace(0., T, 2), dtype)
 
     odemodel = ODE(a, b, dtype)
-    for rtol in np.logspace(-13, 0, 14)[::-1]:
+    for rtol in np.logspace(-13, 0, 53)[::-1]:
         print('rtol:', rtol)
         # Run forward and backward passes, while tracking the time
         with tf.device('/gpu:0'):

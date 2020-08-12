@@ -69,24 +69,6 @@ class DoublePendulum(tf.keras.Model):
         dx = tf.stack([th1_dt, th2_dt, th1_dt_dt, th2_dt_dt], axis=-1)
         return dx
 
-    def step(self, dt=0.01, n_steps=10, *args, **kwargs):
-        """
-        Convenience function, steps the system forward by dt.
-        Uses tfdiffeq's odeint for integration.
-
-        # Arguments:
-            dt: Float - time step
-            n_steps: Int - number of sub-steps to return values for.
-                           The integrator may decide to use more steps to achieve the
-                           set tolerance.
-        # Returns:
-            x: tf.Tensor, shape=(2,) - new state of the system
-        """
-
-        t = tf.linspace(0., dt, n_steps)
-        self.x = odeint(self.call, self.x, t, *args, **kwargs)
-        return self.x
-
     @staticmethod
     def visualize(t, x_val, x_t, dydt_unit, abs_dif, rel_dif,
                   PLOT_DIR, TIME_OF_RUN, log_file_path, epoch=0):

@@ -6,7 +6,7 @@ import numpy as np
 def pretty_print_latex(matrix):
     """Prints matrix in a format that can be pasted into Latex"""
     row = ""
-    for loss in matrix[[3, 5, 2, 4, 6, 7]]:
+    for loss in matrix[[2, 3, 6, 7]]:
         if loss < 1e-2:  # use scientific notation
             row += (" {0:.1e}          &".format(float(loss))).replace('-0', '-')
         else:

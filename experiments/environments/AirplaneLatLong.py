@@ -44,23 +44,6 @@ class AirplaneLatLong(tf.keras.Model):
         dx = tf.matmul(tf.cast(self.A, x.dtype), tf.expand_dims(x, -1))[..., 0]
         return dx
 
-    def step(self, dt=0.01, n_steps=10, *args, **kwargs):
-        """
-        Steps the system forward by dt.
-        Uses tfdiffeq.odeint for integration.
-
-        # Arguments:
-            dt: Float - time step
-            n_steps: Int - number of sub-steps to return values for.
-                           The integrator may decide to use more steps to
-                           achieve the set tolerance.
-        # Returns:
-            x: tf.Tensor, shape=(8,) - new state of the system
-        """
-        t = tf.linspace(0., dt, n_steps)
-        self.x = odeint(self, self.x, t, *args, **kwargs)
-        return self.x
-
     @staticmethod
     def visualize(t, x_val, x_t, dydt_unit, abs_dif, rel_dif,
                   PLOT_DIR, TIME_OF_RUN, log_file_path, epoch=0):

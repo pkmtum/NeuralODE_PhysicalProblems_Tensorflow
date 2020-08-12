@@ -59,7 +59,8 @@ def create_dataset(n_series, config, n_steps=1001):
     x0 = (2 * tf.random.uniform((n_series, config['dof'])) - 1)
     model = model_func(x0=x0)
     with tf.device('/gpu:0'):
-        x_train = model.step(dt=(n_steps-1)*config['delta_t'], n_steps=n_steps)
+        t = tf.linspace(0., (n_steps-1)*config['delta_t'], n_steps)
+        x_train = odeint(model, x0, t)
         y_train = np.array(model.call(0., x_train))
     x_train = np.transpose(x_train, [1, 0, 2])
     y_train = np.transpose(y_train, [1, 0, 2])
@@ -68,15 +69,19 @@ def create_dataset(n_series, config, n_steps=1001):
     y_val = []
     # Extrapolation
     if 'extrapolation' in config['validation']:
-        model = model_func(x0=tf.constant(config['validation']['extrapolation']))
+        x0 = tf.constant(config['validation']['extrapolation'])
+        model = model_func(x0=x0)
         with tf.device('/gpu:0'):
-            x_val.append(model.step(dt=(n_steps-1)*config['delta_t'], n_steps=n_steps))
+            t = tf.linspace(0., (n_steps-1)*config['delta_t'], n_steps)
+            x_val.append(odeint(model, x0, t))
             y_val.append(np.array(model.call(0., x_val[-1])))
     # Interpolation
     if 'interpolation' in config['validation']:
-        model = model_func(x0=tf.constant(config['validation']['interpolation']))
+        x0 = tf.constant(config['validation']['interpolation'])
+        model = model_func(x0=x0)
         with tf.device('/gpu:0'):
-            x_val.append(model.step(dt=(n_steps-1)*config['delta_t'], n_steps=n_steps))
+            t = tf.linspace(0., (n_steps-1)*config['delta_t'], n_steps)
+            x_val.append(odeint(model, x0, t))
             y_val.append(np.array(model.call(0., x_val[-1])))
     x_val = np.stack(x_val)
     y_val = np.stack(y_val)
