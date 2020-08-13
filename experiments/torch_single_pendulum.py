@@ -48,12 +48,14 @@ def visualize_single_pendulum_model(model, epoch=0):
     plt.scatter(x_t_ref[:, 0], x_t_ref[:, 1], c=np.linspace(0., 255., x_t.shape[0]), cmap='magma')
     plt.xlabel('theta')
     plt.ylabel('theta_dt')
-    plt.savefig(PLOT_DIR + 'phase_plot_theta_single_pendulum_ref.png'.format(epoch))
+    plt.savefig(PLOT_DIR + 'phase_plot_theta_single_pendulum_ref.pdf'.format(epoch),
+                bbox_inches='tight', pad_inches=0.)
     plt.close()
     plt.scatter(x_t[:, 0], x_t[:, 1], c=np.linspace(0., 255., x_t.shape[0]), cmap='magma')
     plt.xlabel('theta')
     plt.ylabel('theta_dt')
-    plt.savefig(PLOT_DIR + 'phase_plot_theta_single_pendulum{}.png'.format(epoch))
+    plt.savefig(PLOT_DIR + 'phase_plot_theta_single_pendulum{}.pdf'.format(epoch),
+                bbox_inches='tight', pad_inches=0.)
     plt.close()
 
     xp = np.linspace(-6.3, 6.3, 60)
@@ -71,7 +73,8 @@ def visualize_single_pendulum_model(model, epoch=0):
     plt.quiver(xpv, ypv, u_pred, v_pred)
     plt.xlabel('theta')
     plt.ylabel('theta_dt')
-    plt.savefig(PLOT_DIR + 'quiver_plot{}.png'.format(epoch))
+    plt.savefig(PLOT_DIR + 'quiver_plot{}.pdf'.format(epoch),
+                bbox_inches='tight', pad_inches=0.)
     plt.close()
 
     u_true = inp[:,1]
@@ -81,7 +84,8 @@ def visualize_single_pendulum_model(model, epoch=0):
     plt.quiver(xpv, ypv, u_true, v_true)
     plt.xlabel('theta')
     plt.ylabel('theta_dt')
-    plt.savefig(PLOT_DIR + 'quiver_plot_ref.png'.format(epoch))
+    plt.savefig(PLOT_DIR + 'quiver_plot_ref.pdf'.format(epoch),
+                bbox_inches='tight', pad_inches=0.)
     plt.close()
     x_dif = u_pred-u_true
     y_dif = v_pred-v_true
@@ -90,7 +94,8 @@ def visualize_single_pendulum_model(model, epoch=0):
     plt.colorbar()
     plt.xlabel('theta')
     plt.ylabel('theta_dt')
-    plt.savefig(PLOT_DIR + 'quiver_plot_{}_vs_ref_abs.png'.format(epoch))
+    plt.savefig(PLOT_DIR + 'quiver_plot_{}_vs_ref_abs.pdf'.format(epoch),
+                bbox_inches='tight', pad_inches=0.)
     plt.close()
 
     rel_dif = np.clip(abs_dif / np.sqrt(np.square(u_true)+np.square(v_true)), 0, 1)
@@ -98,7 +103,8 @@ def visualize_single_pendulum_model(model, epoch=0):
     plt.colorbar()
     plt.xlabel('theta')
     plt.ylabel('theta_dt')
-    plt.savefig(PLOT_DIR + 'quiver_plot_{}_vs_ref_rel.png'.format(epoch))
+    plt.savefig(PLOT_DIR + 'quiver_plot_{}_vs_ref_rel.pdf'.format(epoch),
+                bbox_inches='tight', pad_inches=0.)
     plt.close()
 
 

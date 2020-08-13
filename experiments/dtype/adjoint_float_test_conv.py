@@ -16,11 +16,11 @@ class ODE(tf.keras.Model):
 
     def __init__(self, dtype):
         super(ODE, self).__init__(dtype=dtype)
-        self.conv1 = tf.keras.layers.Conv2D(32, 3, activation='sigmoid')
-        self.conv2 = tf.keras.layers.Conv2D(32, 3, activation='sigmoid')
-        self.conv3 = tf.keras.layers.Conv2D(32, 3, activation='sigmoid')
+        self.conv1 = tf.keras.layers.Conv2D(32, 3, activation='tanh')
+        self.conv2 = tf.keras.layers.Conv2D(32, 3, activation='tanh')
+        self.conv3 = tf.keras.layers.Conv2D(32, 3, activation='tanh')
         self.flatten = tf.keras.layers.Flatten()
-        self.dense1 = tf.keras.layers.Dense(1568, activation='sigmoid')
+        self.dense1 = tf.keras.layers.Dense(1568, activation='tanh')
         self.dense2 = tf.keras.layers.Dense(1568)
         self.reshape = tf.keras.layers.Reshape((14, 14, 8))
         self.nfe = tf.Variable(0., trainable=False)
@@ -80,7 +80,7 @@ for dtype in dtypes:
         if hasattr(exact_layer, 'bias'):
             layer.bias.assign(tf.cast(exact_layer.bias, dtype))
 
-    for rtol in np.logspace(-13, 0, 53)[::-1]:
+    for rtol in np.logspace(-13, 0, 40)[::-1]:
         print('rtol:', rtol)
         # Don't run low tolerances with f32, they run for extremely long.
         if rtol <= 1e-11 and dtype == tf.float32:

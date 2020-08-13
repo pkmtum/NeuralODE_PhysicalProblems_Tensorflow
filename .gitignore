@@ -9,3 +9,5 @@
 *.mov
 *.numbers
 .vscode*
+*.pdf
+*.ini

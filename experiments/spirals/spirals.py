@@ -31,6 +31,7 @@ else:
 
 MAX_NUM_STEPS = 1000  # Maximum number of steps for ODE solver
 
+
 def create_spirals(N):
     """ Creates a list of points which form a spiral
         # Arguments:
@@ -67,7 +68,9 @@ def plot_contour_map(model, epoch):
     plt.contourf(xp, yp, np.reshape(preds, (xp.shape[0], yp.shape[0])))
     plt.scatter((x[y.argsort()])[:N, 0], (x[y.argsort()])[:N, 1])
     plt.scatter((x[y.argsort()])[N:, 0], (x[y.argsort()])[N:, 1])
-    plt.savefig('plots/spiral/' + args.network + '/pred{}.png'.format(epoch))
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.savefig('plots/spiral/' + args.network + '/pred{}.pdf'.format(epoch),
+                bbox_inches='tight', pad_inches=0.)
     plt.close()
 
 

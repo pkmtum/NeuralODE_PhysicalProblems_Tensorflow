@@ -2,7 +2,6 @@ import datetime
 import os
 import numpy as np
 import tensorflow as tf
-from tfdiffeq import odeint
 import matplotlib.pyplot as plt
 from . import metrics
 
@@ -129,8 +128,8 @@ class DoublePendulum(tf.keras.Model):
 
         ax_phase_interp.cla()
         ax_phase_interp.set_title('Phase Portrait (interpolation)')
-        ax_phase_interp.set_xlabel('theta')
-        ax_phase_interp.set_ylabel('theta_dt')
+        ax_phase_interp.set_xlabel('theta1')
+        ax_phase_interp.set_ylabel('theta2')
         ax_phase_interp.plot(x_val[1, :, 0], x_val[1, :, 1], 'g--')
         ax_phase_interp.plot(x_t[1, :, 0], x_t[1, :, 1], 'b--')
         ax_phase_interp.set_xlim(-1, 1)
@@ -138,8 +137,8 @@ class DoublePendulum(tf.keras.Model):
 
         ax_phase_extrap.cla()
         ax_phase_extrap.set_title('Phase Portrait (extrapolation)')
-        ax_phase_extrap.set_xlabel('theta')
-        ax_phase_extrap.set_ylabel('theta_dt')
+        ax_phase_extrap.set_xlabel('theta1')
+        ax_phase_extrap.set_ylabel('theta2')
         ax_phase_extrap.plot(x_val[0, :, 0], x_val[0, :, 1], 'g--')
         ax_phase_extrap.plot(x_t[0, :, 0], x_t[0, :, 1], 'b--')
         ax_phase_extrap.set_xlim(-3, 3)
@@ -147,8 +146,8 @@ class DoublePendulum(tf.keras.Model):
 
         ax_vecfield.cla()
         ax_vecfield.set_title('Learned Vector Field')
-        ax_vecfield.set_xlabel('theta')
-        ax_vecfield.set_ylabel('theta_dt')
+        ax_vecfield.set_xlabel('theta1')
+        ax_vecfield.set_ylabel('theta2')
 
         steps = dydt_unit.shape[0]
         y, x = np.mgrid[-3:3:complex(0, steps), -3:3:complex(0, steps)]
@@ -159,22 +158,26 @@ class DoublePendulum(tf.keras.Model):
 
         ax_vec_error_abs.cla()
         ax_vec_error_abs.set_title('Abs. error of thetadot')
-        ax_vec_error_abs.set_xlabel('theta')
-        ax_vec_error_abs.set_ylabel('theta_dt')
+        ax_vec_error_abs.set_xlabel('theta1')
+        ax_vec_error_abs.set_ylabel('theta2')
 
         c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
         plt.colorbar(c1, ax=ax_vec_error_abs)
+        for c in c1.collections:
+            c.set_edgecolor("face")
 
         ax_vec_error_abs.set_xlim(-3, 3)
         ax_vec_error_abs.set_ylim(-3, 3)
 
         ax_vec_error_rel.cla()
         ax_vec_error_rel.set_title('Rel. error of thetadot')
-        ax_vec_error_rel.set_xlabel('theta')
-        ax_vec_error_rel.set_ylabel('theta_dt')
+        ax_vec_error_rel.set_xlabel('theta1')
+        ax_vec_error_rel.set_ylabel('theta2')
 
         c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
         plt.colorbar(c2, ax=ax_vec_error_rel)
+        for c in c2.collections:
+            c.set_edgecolor("face")
 
         ax_vec_error_rel.set_xlim(-3, 3)
         ax_vec_error_rel.set_ylim(-3, 3)
@@ -192,7 +195,7 @@ class DoublePendulum(tf.keras.Model):
         ax_energy_extrap.plot(t.numpy(), total_energy(x_t[0]))
 
         fig.tight_layout()
-        plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
+        plt.savefig(PLOT_DIR + '{:03d}.pdf'.format(epoch), bbox_inches='tight', pad_inches=0.)
         plt.close()
 
         # Compute Metrics
@@ -216,6 +219,9 @@ class DoublePendulum(tf.keras.Model):
                                                     energy_drift_interp, energy_drift_extrap,
                                                     phase_error_interp, phase_error_extrap,
                                                     traj_error_interp, traj_error_extrap)
+
+        print(string)
+
         if not os.path.isfile(log_file_path):
             title_string = ("wall_time,epoch,energy_drift_interp,energy_drift_extrap,phase_error_interp,"
                             + "phase_error_extrap,traj_err_interp,traj_err_extrap\n")

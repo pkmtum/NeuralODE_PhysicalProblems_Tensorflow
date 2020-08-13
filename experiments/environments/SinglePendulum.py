@@ -134,6 +134,8 @@ class SinglePendulum(tf.keras.Model):
 
         c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
         plt.colorbar(c1, ax=ax_vec_error_abs)
+        for c in c1.collections:
+            c.set_edgecolor("face")
 
         ax_vec_error_abs.set_xlim(-6, 6)
         ax_vec_error_abs.set_ylim(-6, 6)
@@ -145,6 +147,8 @@ class SinglePendulum(tf.keras.Model):
 
         c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
         plt.colorbar(c2, ax=ax_vec_error_rel)
+        for c in c2.collections:
+            c.set_edgecolor("face")
 
         ax_vec_error_rel.set_xlim(-6, 6)
         ax_vec_error_rel.set_ylim(-6, 6)
@@ -156,7 +160,7 @@ class SinglePendulum(tf.keras.Model):
         ax_energy.plot(t.numpy(), total_energy(x_t[0]))
 
         fig.tight_layout()
-        plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
+        plt.savefig(PLOT_DIR + '{:03d}.pdf'.format(epoch), bbox_inches='tight', pad_inches=0.)
         plt.close()
 
         # Compute Metrics
@@ -172,6 +176,9 @@ class SinglePendulum(tf.keras.Model):
                                            energy_drift_interp,
                                            phase_error_interp,
                                            traj_err_interp)
+
+        print(string)
+
         if not os.path.isfile(log_file_path):
             title_string = "wall_time,epoch,energy_interp,phase_interp,traj_err_interp\n"
             fd = open(log_file_path, 'a')

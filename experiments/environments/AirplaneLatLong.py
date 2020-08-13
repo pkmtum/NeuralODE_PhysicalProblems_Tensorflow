@@ -2,7 +2,6 @@ import datetime
 import os
 import numpy as np
 import tensorflow as tf
-from tfdiffeq import odeint
 import matplotlib.pyplot as plt
 from . import metrics
 
@@ -139,6 +138,8 @@ class AirplaneLatLong(tf.keras.Model):
         ax_vec_error_abs.set_ylabel('gamma')
         c1 = ax_vec_error_abs.contourf(x, y, abs_dif, 100)
         plt.colorbar(c1, ax=ax_vec_error_abs)
+        for c in c1.collections:
+            c.set_edgecolor("face")
 
         ax_vec_error_abs.set_xlim(-6, 6)
         ax_vec_error_abs.set_ylim(-6, 6)
@@ -150,6 +151,8 @@ class AirplaneLatLong(tf.keras.Model):
 
         c2 = ax_vec_error_rel.contourf(x, y, rel_dif, 100)
         plt.colorbar(c2, ax=ax_vec_error_rel)
+        for c in c2.collections:
+            c.set_edgecolor("face")
 
         ax_vec_error_rel.set_xlim(-6, 6)
         ax_vec_error_rel.set_ylim(-6, 6)
@@ -176,8 +179,7 @@ class AirplaneLatLong(tf.keras.Model):
         ax_3d_lat.view_init(elev=1., azim=90.)
 
         fig.tight_layout()
-        plt.savefig(plot_fig)
-        plt.savefig(PLOT_DIR + '{:03d}'.format(epoch))
+        plt.savefig(PLOT_DIR + '{:03d}.pdf'.format(epoch), bbox_inches='tight', pad_inches=0.)
         plt.close()
 
         # Compute metrics and save them to csv.
@@ -202,6 +204,8 @@ class AirplaneLatLong(tf.keras.Model):
             pe_interp_lat_r, pe_extrap_lat_r,
             pe_interp_lat_p, pe_extrap_lat_p,
             traj_error_interp, traj_error_extrap)
+
+        print(string)
 
         if not os.path.isfile(log_file_path):
             title_string = ("wall_time,epoch,"
