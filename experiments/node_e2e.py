@@ -15,10 +15,9 @@ tf.config.experimental.set_virtual_device_configuration(
     gpus[0],
     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=256)])
 
-parser = argparse.ArgumentParser('ODE demo')
+parser = argparse.ArgumentParser()
 parser.add_argument('--system', type=str, default='mass_spring_damper')
 parser.add_argument('--method', type=str, default='dopri5')
-parser.add_argument('--data_size', type=int, default=1001)
 parser.add_argument('--dataset_size', type=int, choices=[100], default=100)
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--batch_time', type=int, default=16)
@@ -46,15 +45,15 @@ PLOT_DIR = 'plots/' + config['name'] + '/node-e2e/'
 TIME_OF_RUN = datetime.datetime.now()
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
-t = tf.range(0., args.data_size) * config['delta_t']
-if args.dtype == 'float64':
-    t = tf.cast(t, tf.float64)
-
 if not os.path.isfile('experiments/datasets/' + config['name'] + '_x_train.npy'):
     x_train, _, x_val, _ = create_dataset(n_series=51, config=config)
 x_train, _, x_val, _ = load_dataset(config)
 x_train = x_train.astype(args.dtype)
 x_val = x_val.astype(args.dtype)
+
+t = tf.range(x_train.shape[1]) * config['delta_t']
+if args.dtype == 'float64':
+    t = tf.cast(t, tf.float64)
 
 makedirs(PLOT_DIR)
 

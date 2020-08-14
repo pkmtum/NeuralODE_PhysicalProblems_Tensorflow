@@ -85,9 +85,9 @@ class SinglePendulum(tf.keras.Model):
             log_file_path: str - Where to save the log data
             epoch: int
         """
-        def total_energy(state, l=1., g=9.81):
+        def total_energy(state, m=1., l=1., g=9.81):
             """Calculates total energy of a pendulum system given a state."""
-            return (1-np.cos(state[..., 0]))*l*g+state[..., 1]*state[..., 1]*0.5
+            return m*((1-np.cos(state[..., 0]))*l*g+state[..., 1]*state[..., 1]*l*l*0.5)
 
         fig = plt.figure(figsize=(12, 8), facecolor='white')
         ax_traj = fig.add_subplot(231, frameon=False)
@@ -96,6 +96,7 @@ class SinglePendulum(tf.keras.Model):
         ax_vec_error_abs = fig.add_subplot(234, frameon=False)
         ax_vec_error_rel = fig.add_subplot(235, frameon=False)
         ax_energy = fig.add_subplot(236, frameon=False)
+
         ax_traj.cla()
         ax_traj.set_title('Trajectories')
         ax_traj.set_xlabel('t')
@@ -104,7 +105,6 @@ class SinglePendulum(tf.keras.Model):
         ax_traj.plot(t.numpy(), x_t[0, :, 0], '--', t.numpy(), x_t[0, :, 1], 'b--')
         ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
         ax_traj.set_ylim(-6, 6)
-        ax_traj.legend()
 
         ax_phase.cla()
         ax_phase.set_title('Phase Portrait')

@@ -1,5 +1,5 @@
 """
-Single Pendulum experiment, NODE-e2e.
+Tests multiple different ODE-solver combinations with an NODE-e2e.
 """
 import argparse
 import datetime
@@ -15,7 +15,7 @@ tf.config.experimental.set_virtual_device_configuration(
     gpus[0],
     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=256)])
 
-parser = argparse.ArgumentParser('ODE demo')
+parser = argparse.ArgumentParser()
 parser.add_argument('--system', type=str, default='single_pendulum')
 parser.add_argument('--method', type=str,
                     choices=['dopri5', 'adams', 'euler', 'midpoint'], default='dopri5')
@@ -84,7 +84,6 @@ class ODEFunc(tf.keras.Model):
         self.x2 = tf.keras.layers.Dense(config['hidden_dim'], activation='relu')
         self.y = tf.keras.layers.Dense(config['dof'])
         self.nfe = tf.Variable(0., trainable=False)
-        self.nbe = tf.Variable(0., trainable=False)
 
     @tf.function
     def call(self, t, y):

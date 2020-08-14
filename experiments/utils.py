@@ -94,10 +94,14 @@ def create_dataset(n_series, config, n_steps=1001):
 
 
 def load_dataset(config):
-    x_train = np.load('experiments/datasets/' + config['name'] + '_x_train.npy').astype(np.float32)
-    y_train = np.load('experiments/datasets/' + config['name'] + '_y_train.npy').astype(np.float32)
-    x_val = np.load('experiments/datasets/' + config['name'] + '_x_val.npy').astype(np.float32)
-    y_val = np.load('experiments/datasets/' + config['name'] + '_y_val.npy').astype(np.float32)
+    x_train = np.load('experiments/datasets/' + config['name'] + '_x_train.npy')
+    x_train = x_train.astype(np.float32)
+    y_train = np.load('experiments/datasets/' + config['name'] + '_y_train.npy')
+    y_train = y_train.astype(np.float32)
+    x_val = np.load('experiments/datasets/' + config['name'] + '_x_val.npy')
+    x_val = x_val.astype(np.float32)
+    y_val = np.load('experiments/datasets/' + config['name'] + '_y_val.npy')
+    y_val = y_val.astype(np.float32)
     return x_train, y_train, x_val, y_val
 
 
@@ -123,8 +127,15 @@ def my_mse(y_true, y_pred):
     return tf.reduce_mean(tf.square(y_true - y_pred), axis=-1)
 
 
-def predict_time_series(model, x_val, config, ode_model, is_mdn):
+def predict_time_series(model, x_val, config, ode_model, is_mdn=False):
     """Uses the model to predict the validation trajectories contained in x_val
+    # Arguments:
+        model: tf.keras.Model - the model to evaluate
+        x_val np.ndarray - the validation trajectories
+        config: dict - configuration of the system as defined in .json
+        ode_model: bool - whether the model outputs the next timestep (false)
+                          or the derivative at the current timestep (true)
+        is_mdn: bool - whether the model is a mixture density model
     """
     t = tf.range(0., x_val.shape[1]) * config['delta_t']
     x_t = np.zeros_like(x_val)

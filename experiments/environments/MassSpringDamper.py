@@ -74,6 +74,7 @@ class MassSpringDamper(tf.keras.Model):
         ax_vec_error_abs = fig.add_subplot(234, frameon=False)
         ax_vec_error_rel = fig.add_subplot(235, frameon=False)
         ax_energy = fig.add_subplot(236, frameon=False)
+
         ax_traj.cla()
         ax_traj.set_title('Trajectories')
         ax_traj.set_xlabel('t')
@@ -82,7 +83,6 @@ class MassSpringDamper(tf.keras.Model):
         ax_traj.plot(t.numpy(), x_t[0, :, 0], '--', t.numpy(), x_t[0, :, 1], 'b--')
         ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
         ax_traj.set_ylim(-6, 6)
-        ax_traj.legend()
 
         ax_phase.cla()
         ax_phase.set_title('Phase Portrait')

@@ -85,7 +85,6 @@ class AirplaneLatLong(tf.keras.Model):
             ax_traj.plot(t.numpy(), x_t[0, :, i], 'b--')
         ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
         ax_traj.set_ylim(-2, 2)
-        ax_traj.legend()
 
         ax_traj_lat.cla()
         ax_traj_lat.set_title('Trajectories')
@@ -96,7 +95,6 @@ class AirplaneLatLong(tf.keras.Model):
             ax_traj_lat.plot(t.numpy(), x_t[0, :, i], 'b--')
         ax_traj_lat.set_xlim(min(t.numpy()), max(t.numpy()))
         ax_traj_lat.set_ylim(-2, 2)
-        ax_traj_lat.legend()
 
         ax_phase.cla()
         ax_phase.set_title('Phase Portrait phugoid')
@@ -179,7 +177,8 @@ class AirplaneLatLong(tf.keras.Model):
         ax_3d_lat.view_init(elev=1., azim=90.)
 
         fig.tight_layout()
-        plt.savefig(PLOT_DIR + '{:03d}.pdf'.format(epoch), bbox_inches='tight', pad_inches=0.)
+        plt.savefig(PLOT_DIR + '{:03d}.pdf'.format(epoch),
+                    bbox_inches='tight', pad_inches=0.)
         plt.close()
 
         # Compute metrics and save them to csv.

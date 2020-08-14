@@ -77,7 +77,6 @@ class AirplaneLong(tf.keras.Model):
             ax_traj.plot(t.numpy(), x_t[0, :, i], 'b--')
         ax_traj.set_xlim(min(t.numpy()), max(t.numpy()))
         ax_traj.set_ylim(-2, 2)
-        ax_traj.legend()
 
         ax_phase.cla()
         ax_phase.set_title('Phase Portrait phugoid')

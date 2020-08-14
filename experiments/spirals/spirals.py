@@ -81,7 +81,7 @@ class ODEFunc(tf.keras.Model):
         self.hidden_dim = hidden_dim
         self.augment_dim = augment_dim
         self.time_dependent = time_dependent
-        self.dense1 = Dense(hidden_dim, activation='relu')
+        self.dense1 = Dense(hidden_dim, activation='softplus')
         self.nfe = tf.Variable(0., trainable=False)
         self.nbe = tf.Variable(0., trainable=False)
 

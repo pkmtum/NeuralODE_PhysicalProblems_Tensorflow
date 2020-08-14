@@ -9,6 +9,7 @@
             "extrapolation": [1.5, 1.5, 1.0, 0.5, 1.5, 1.0, 1.5, 1.5],
             "interpolation": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
         },
+        "activation": "sigmoid",
         "viz_options": {
             "vector_field": {
                 "axes": [0, 1],

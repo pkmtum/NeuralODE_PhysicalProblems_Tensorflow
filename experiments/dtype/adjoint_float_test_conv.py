@@ -1,4 +1,5 @@
-"""Comparision of the adjoint method with regular backpropagation.
+"""
+Comparision of the adjoint method with regular backpropagation.
 Also compares tf.float32 to tf.float64.
 """
 import time

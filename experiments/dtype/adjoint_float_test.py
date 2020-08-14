@@ -1,4 +1,5 @@
-"""Comparision of the adjoint method with regular backpropagation.
+"""
+Comparision of the adjoint method with regular backpropagation.
 Uses the simple test equation:
 $ f(T) = \int_{0}^{T}x dt$
 subject to $ \dot{x} = bx $

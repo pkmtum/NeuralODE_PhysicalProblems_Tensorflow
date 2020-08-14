@@ -20,18 +20,15 @@ tf.config.experimental.set_virtual_device_configuration(
 parser = argparse.ArgumentParser('ODE demo')
 parser.add_argument('--system', type=str, default='mass_spring_damper')
 parser.add_argument('--method', type=str, default='dopri5')
-parser.add_argument('--data_size', type=int, default=1001)
 parser.add_argument('--dataset_size', type=int, choices=[100], default=100)
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--batch_time', type=int, default=16)
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--niters', type=int, default=10000)
 parser.add_argument('--test_freq', type=int, default=500)
-parser.add_argument('--viz', action='store_true')
 parser.add_argument('--gpu', type=int, default=0)
 parser.add_argument('--adjoint', type=eval, default=False)
 parser.add_argument('--dtype', type=str, choices=['float32', 'float64'], default='float32')
-parser.set_defaults(viz=True)
 args = parser.parse_args()
 
 tf.keras.backend.set_floatx(args.dtype)
@@ -50,15 +47,15 @@ PLOT_DIR = 'plots/' + config['name'] + '/matrix_learning/'
 TIME_OF_RUN = datetime.datetime.now()
 device = 'gpu:' + str(args.gpu) if len(gpus) else 'cpu:0'
 
-t = tf.range(args.data_size) * config['delta_t']
-if args.dtype == 'float64':
-    t = tf.cast(t, tf.float64)
-
 if not os.path.isfile('experiments/datasets/' + config['name'] + '_x_train.npy'):
     x_train, _, x_val, _ = create_dataset(n_series=51, config=config)
 x_train, _, x_val, _ = load_dataset(config)
 x_train = x_train.astype(args.dtype)
 x_val = x_val.astype(args.dtype)
+
+t = tf.range(x_train.shape[1]) * config['delta_t']
+if args.dtype == 'float64':
+    t = tf.cast(t, tf.float64)
 
 makedirs(PLOT_DIR)
 
@@ -87,9 +84,11 @@ class ODEFunc(tf.keras.Model):
         super(ODEFunc, self).__init__(**kwargs)
         self.A = tf.Variable(tf.random.normal((config['dof'], config['dof']), stddev=0.1),
                              trainable=True)
+        self.nfe = tf.Variable(0., trainable=False)
 
     @tf.function
     def call(self, t, y):
+        self.nfe.assign_add(1.)
         return tf.matmul(tf.cast(self.A, y.dtype), tf.expand_dims(y, -1))[..., 0]
 
 

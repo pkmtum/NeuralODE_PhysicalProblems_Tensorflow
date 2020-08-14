@@ -37,7 +37,7 @@ TIME_OF_RUN = datetime.datetime.now()
 makedirs(PLOT_DIR)
 
 if not os.path.isfile('experiments/datasets/' + config['name'] + '_x_train.npy'):
-    x_train, y_train, x_val, y_val = create_dataset(n_series=51, config=config)
+    x_train, y_train, x_val, y_val = create_dataset(n_series=1000, config=config)
 x_train, y_train, x_val, y_val = load_dataset(config)
 if args.synthetic_derivative:
     y_train = np.gradient(x_train)[1] / config['delta_t']
@@ -49,11 +49,12 @@ c = np.arange(len(x_train))
 np.random.shuffle(c)
 x_train = x_train[c[::int(100/args.dataset_size)]]
 y_train = y_train[c[::int(100/args.dataset_size)]]
+activation_fn = config['activation'] if 'activation' in config else 'relu'
 
 model = Sequential()
-model.add(Dense(config['hidden_dim'], 'relu', kernel_regularizer=l2(1e-5),
+model.add(Dense(config['hidden_dim'], activation_fn, kernel_regularizer=l2(1e-6),
                 input_shape=(config['dof'],)))
-model.add(Dense(config['hidden_dim'], 'relu', kernel_regularizer=l2(1e-5)))
+model.add(Dense(config['hidden_dim'], activation_fn, kernel_regularizer=l2(1e-6)))
 model.add(Dense(config['dof']))
 
 adam = Adam(lr=args.lr)

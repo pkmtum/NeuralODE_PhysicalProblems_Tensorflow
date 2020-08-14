@@ -108,6 +108,7 @@ class DoublePendulum(tf.keras.Model):
         ax_vec_error_rel = fig.add_subplot(339, frameon=False)
         ax_energy_interp = fig.add_subplot(337, frameon=False)
         ax_energy_extrap = fig.add_subplot(338, frameon=False)
+
         ax_traj_interp.cla()
         ax_traj_interp.set_title('Trajectories (interpolation)')
         ax_traj_interp.set_xlabel('t')
