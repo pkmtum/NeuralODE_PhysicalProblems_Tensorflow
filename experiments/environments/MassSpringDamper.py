@@ -4,9 +4,10 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from . import metrics
+from .PhysicalSystem import PhysicalSystem
 
 
-class MassSpringDamper(tf.keras.Model):
+class MassSpringDamper(PhysicalSystem):
     """Class that provides a customizable version of a mass-spring-damper system.
        All parameters are customizable.
     """

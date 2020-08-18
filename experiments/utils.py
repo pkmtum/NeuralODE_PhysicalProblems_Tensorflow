@@ -10,7 +10,6 @@ import environments
 
 class modelFunc(tf.keras.Model):
     """Converts a standard tf.keras.Model to a model compatible with odeint."""
-
     def __init__(self, model):
         super(modelFunc, self).__init__()
         self.model = model
@@ -21,7 +20,6 @@ class modelFunc(tf.keras.Model):
 
 class RunningAverageMeter():
     """Computes and stores the average and current value"""
-
     def __init__(self, momentum=0.99):
         self.momentum = momentum
         self.reset()

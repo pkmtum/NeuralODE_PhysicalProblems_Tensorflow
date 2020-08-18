@@ -5,9 +5,10 @@ import tensorflow as tf
 from tfdiffeq import odeint
 import matplotlib.pyplot as plt
 from . import metrics
+from .PhysicalSystem import PhysicalSystem
 
 
-class SinglePendulum(tf.keras.Model):
+class SinglePendulum(PhysicalSystem):
     """Class that provides a customizable version of a pendulum.
        All parameters are customizable.
     """

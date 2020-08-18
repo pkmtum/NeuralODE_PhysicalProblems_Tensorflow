@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--system', type=str, default='mass_spring_damper')
 parser.add_argument('--method', type=str, default='dopri5')
 parser.add_argument('--dataset_size', type=int, choices=[100], default=100)
-parser.add_argument('--lr', type=float, default=0.01)
+parser.add_argument('--lr', type=float, default=3e-2)
 parser.add_argument('--batch_time', type=int, default=16)
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--niters', type=int, default=10000)
@@ -51,7 +51,7 @@ x_train, _, x_val, _ = load_dataset(config)
 x_train = x_train.astype(args.dtype)
 x_val = x_val.astype(args.dtype)
 
-t = tf.range(x_train.shape[1]) * config['delta_t']
+t = tf.range(0., x_train.shape[1]) * config['delta_t']
 if args.dtype == 'float64':
     t = tf.cast(t, tf.float64)
 
@@ -66,7 +66,7 @@ def get_batch():
         replace=True)
     # pick random starting time
     s = np.random.choice(
-        np.arange(args.data_size - args.batch_time,
+        np.arange(x_train.shape[1] - args.batch_time,
                   dtype=np.int64), args.batch_size,
         replace=False)
 

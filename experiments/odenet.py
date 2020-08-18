@@ -73,7 +73,6 @@ class ODEFunc(tf.keras.Model):
 
 
 class ODEBlock(tf.keras.Model):
-
     def __init__(self, odefunc, tol=1e-3, solver='dopri5', **kwargs):
         """
         Solves ODE defined by odefunc.

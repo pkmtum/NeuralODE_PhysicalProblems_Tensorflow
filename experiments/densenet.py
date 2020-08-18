@@ -37,7 +37,7 @@ TIME_OF_RUN = datetime.datetime.now()
 makedirs(PLOT_DIR)
 
 if not os.path.isfile('experiments/datasets/' + config['name'] + '_x_train.npy'):
-    x_train, y_train, x_val, y_val = create_dataset(n_series=1000, config=config)
+    x_train, y_train, x_val, y_val = create_dataset(n_series=51, config=config)
 x_train, y_train, x_val, y_val = load_dataset(config)
 if args.synthetic_derivative:
     y_train = np.gradient(x_train)[1] / config['delta_t']

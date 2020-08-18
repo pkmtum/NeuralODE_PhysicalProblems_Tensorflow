@@ -4,9 +4,10 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from . import metrics
+from .PhysicalSystem import PhysicalSystem
 
 
-class DoublePendulum(tf.keras.Model):
+class DoublePendulum(PhysicalSystem):
     """Class that provides a customizable version of a pendulum.
        All parameters are customizable.
     """
@@ -97,6 +98,26 @@ class DoublePendulum(tf.keras.Model):
             T = 0.5*m1*tf.math.square(l1*th1d) + 0.5*m2*(tf.math.square(l1*th1d)
                 + tf.math.square(l2*th2d) + 2*l1*l2*th1d*th2d*np.cos(th1-th2))
             return T + V
+        for traj in range(2):
+            fig = plt.figure(figsize=(8, 8), facecolor='white')
+            ax_traj0 = fig.add_subplot(221, frameon=False)
+            ax_traj1 = fig.add_subplot(222, frameon=False)
+            ax_traj2 = fig.add_subplot(223, frameon=False)
+            ax_traj3 = fig.add_subplot(224, frameon=False)
+            for i, ax in enumerate([ax_traj0, ax_traj1, ax_traj2, ax_traj3]):
+                ax.cla()
+                ax.set_title('Trajectories {}'.format(i))
+                ax.set_xlabel('t')
+                ax.set_ylabel('x[{}]'.format(i))
+                ax.plot(t.numpy(), x_val[traj, :, i], 'g--')
+                ax.plot(t.numpy(), x_t[traj, :, i], 'b--')
+                ax.set_xlim(min(t.numpy()), max(t.numpy()))
+                ul = np.max(x_val[traj, :, i])
+                ll = np.min(x_val[traj, :, i])
+                ax.set_ylim(int(ll - 1.), int(ul + 1.))
+            fig.tight_layout()
+            plt.savefig(PLOT_DIR + 'Trajs{}_{:03d}.pdf'.format(traj, epoch), bbox_inches='tight', pad_inches=0.)
+            plt.close()
 
         fig = plt.figure(figsize=(12, 12), facecolor='white')
         ax_traj_interp = fig.add_subplot(331, frameon=False)

@@ -4,9 +4,10 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from . import metrics
+from .PhysicalSystem import PhysicalSystem
 
 
-class AirplaneLatLong(tf.keras.Model):
+class AirplaneLatLong(PhysicalSystem):
     """Class that provides a longitudinal motion model of a Boeing B777.
     State has the following structure: (V*, gamma, alpha, q, r, beta, p, phi).T
     """
