@@ -140,7 +140,7 @@ def predict_time_series(model, x_val, config, ode_model, is_mdn=False):
     # Compute the predicted trajectories
     if ode_model:
         x0 = tf.convert_to_tensor(x_val[:, 0])
-        x_t = odeint(model, x0, t, rtol=1e-5, atol=1e-5, method='midpoint').numpy()
+        x_t = odeint(model, x0, t, method='dopri5', options={'max_num_steps': 1000}).numpy()
         x_t = tf.transpose(x_t, [1, 0, 2])
     else:  # LSTM model
         x_t[:, 0] = x_val[:, 0]

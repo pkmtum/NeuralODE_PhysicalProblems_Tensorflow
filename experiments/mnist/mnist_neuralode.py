@@ -47,6 +47,7 @@ if args.adjoint:
 else:
     from tfdiffeq import odeint
 
+
 class GroupNormalization(tf.keras.layers.Layer):
     """Group normalization layer
     Group Normalization divides the channels into groups and computes within each group
@@ -666,6 +667,7 @@ model.compile(loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
               optimizer=optimizer,
               metrics=['accuracy'])
 
+
 def lr_scheduler(epoch):
     if epoch < 40:
         return 0.1
@@ -674,6 +676,7 @@ def lr_scheduler(epoch):
     elif epoch < 140:
         return 0.001
     return 0.0001
+
 
 # Callbacks
 learning_rate_callback = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
@@ -693,6 +696,7 @@ class NFENBECallback(tf.keras.callbacks.Callback):
         if args.network == 'odenet':
             print('\navg. NFE: ', nfe_ram.avg)
             nfe_ram.reset()
+
 
 model.predict(x_train[:1])  # Can't print summary without building the model first
 print(model.summary())

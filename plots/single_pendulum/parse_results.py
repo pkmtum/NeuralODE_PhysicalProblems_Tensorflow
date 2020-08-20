@@ -13,6 +13,7 @@ def pretty_print_latex(matrix):
             row += " {0:.3f}           &".format(float(loss))
     print(row)
 
+
 def parse_filename(file):
     name = file.split('results')[-1]
     if '100' in name:
@@ -22,6 +23,7 @@ def parse_filename(file):
     if '1' in name:
         return '1'
     return
+
 
 for model in ['odenet', 'densenet', 'node-e2e', 'lstm']:
     files = [file for file in os.listdir('plots/single_pendulum/' + model + '/')

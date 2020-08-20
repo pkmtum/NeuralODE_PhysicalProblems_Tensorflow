@@ -38,7 +38,7 @@ class PhysicalSystem(tf.keras.Model):
             ax_traj = [fig.add_subplot(rows*100+cols*10+1+i, frameon=False) for i in range(dof)]
             for i, ax in enumerate(ax_traj):
                 ax.cla()
-                ax.set_title('Trajectories {}'.format(i))
+                ax.set_title('Trajectory x[{}]'.format(i))
                 ax.set_xlabel('t')
                 ax.set_ylabel('x[{}]'.format(i))
                 ax.plot(t.numpy(), x_val[traj, :, i], 'g--')

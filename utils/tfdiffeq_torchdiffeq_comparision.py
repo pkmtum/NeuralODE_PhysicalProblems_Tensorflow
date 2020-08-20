@@ -3,33 +3,37 @@ Compare results of tfdiffeq with torchdiffeq.
 """
 
 import torch
+import tensorflow as tf
+import numpy as np
+from tensorflow.keras.initializers import VarianceScaling
+from torchdiffeq import odeint_adjoint as torch_odeint
+from tfdiffeq import odeint_adjoint as tf_odeint
+
 torch.manual_seed(0)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 torch.set_printoptions(precision=12)
-
-import tensorflow as tf
 tf.random.set_seed(0)
-import numpy as np
 np.random.seed(0)
 
-from torchdiffeq import odeint_adjoint as torch_odeint
-from tfdiffeq import odeint_adjoint as tf_odeint
 
 class tfODEfunc(tf.keras.Model):
-
     def __init__(self):
         super(tfODEfunc, self).__init__()
-        self.nfe = tf.Variable(0., trainable=False)  # Number of function evaluations
+        kernel_initializer = VarianceScaling(scale=1/3., distribution='uniform', seed=0)
+        bias_initializer = VarianceScaling(scale=1/3.*1/9, distribution='uniform', seed=0)
         self.conv1 = tf.keras.layers.Conv2D(filters=1, kernel_size=3, padding='same',
-            kernel_initializer=tf.keras.initializers.VarianceScaling(scale=1/3., distribution='uniform', seed=0),
-            bias_initializer=tf.keras.initializers.VarianceScaling(scale=1/3.*1/9, distribution='uniform', seed=0))
+                                            kernel_initializer=kernel_initializer,
+                                            bias_initializer=bias_initializer)
+        # Track number of function evaluations
+        self.nfe = tf.Variable(0., trainable=False)
 
     @tf.function
     def call(self, t, x):
         self.nfe.assign_add(1.)
         out = self.conv1(x)
         return out
+
 
 class torchODEfunc(torch.nn.Module):
     def __init__(self):
@@ -41,6 +45,7 @@ class torchODEfunc(torch.nn.Module):
         self.nfe += 1
         out = self.conv1(x)
         return out
+
 
 tf_t = tf.linspace(0., 1., 50)
 torch_t = torch.linspace(0., 1., 50)
@@ -56,8 +61,10 @@ tf_func(t=0, x=tf_y0)
 
 torch_model = torch.nn.Sequential(torch_func)
 with torch.no_grad():
-    torch_model[0].conv1.weight = torch.nn.Parameter(torch.from_numpy(np.transpose(tf_func.conv1.get_weights()[0], [2, 3, 0, 1])))
-    torch_model[0].conv1.bias = torch.nn.Parameter(torch.from_numpy(tf_func.conv1.get_weights()[1]))
+    torch_model[0].conv1.weight = torch.nn.Parameter(
+        torch.from_numpy(np.transpose(tf_func.conv1.get_weights()[0], [2, 3, 0, 1])))
+    torch_model[0].conv1.bias = torch.nn.Parameter(
+        torch.from_numpy(tf_func.conv1.get_weights()[1]))
 
 
 with tf.GradientTape() as tape:
@@ -72,7 +79,6 @@ print(torch_func.nfe)
 torch.sum(torch_y[-1]).backward()
 print(torch_func.nfe)
 torch_grad = [torch_model[0].conv1.weight.grad, torch_model[0].conv1.bias.grad]
-
 
 
 torch_grad_np = torch_grad[0].numpy()

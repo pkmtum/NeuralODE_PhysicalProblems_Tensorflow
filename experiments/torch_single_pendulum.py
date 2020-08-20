@@ -45,7 +45,8 @@ def visualize_single_pendulum_model(model, epoch=0):
     ref_pendulum = SinglePendulum(x0=tf.constant([1.01, 5.]))
     x_t_ref = np.array(ref_pendulum.step(dt=999*0.01, n_steps=1000))
     plt.close()
-    plt.scatter(x_t_ref[:, 0], x_t_ref[:, 1], c=np.linspace(0., 255., x_t.shape[0]), cmap='magma')
+    plt.scatter(x_t_ref[:, 0], x_t_ref[:, 1], c=np.linspace(0., 255., x_t.shape[0]),
+                cmap='magma')
     plt.xlabel('theta')
     plt.ylabel('theta_dt')
     plt.savefig(PLOT_DIR + 'phase_plot_theta_single_pendulum_ref.pdf'.format(epoch),
@@ -77,8 +78,8 @@ def visualize_single_pendulum_model(model, epoch=0):
                 bbox_inches='tight', pad_inches=0.)
     plt.close()
 
-    u_true = inp[:,1]
-    v_true =  -ref_pendulum.g/ref_pendulum.l*np.sin(inp[:,0])
+    u_true = inp[:, 1]
+    v_true = -ref_pendulum.g/ref_pendulum.l*np.sin(inp[:, 0])
 
     # plt.scatter(x_train[:,0], x_train[:,1], s=2, alpha=0.01)
     plt.quiver(xpv, ypv, u_true, v_true)
